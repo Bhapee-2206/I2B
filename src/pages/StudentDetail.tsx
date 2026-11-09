@@ -698,3 +698,4 @@ export const StudentDetail: React.FC = () => {
     </div>
   );
 };
+

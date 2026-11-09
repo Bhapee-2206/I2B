@@ -1102,3 +1102,4 @@ export async function resetToExcelDefaults(): Promise<void> {
   setLocal(LOCAL_STORAGE_KEYS.RECEIPTS, []);
   await logAudit('reset_to_excel_defaults', 'system', 'all', { message: 'Restored original Excel seed state' });
 }
+

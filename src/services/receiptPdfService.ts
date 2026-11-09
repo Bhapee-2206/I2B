@@ -359,3 +359,4 @@ export function getReceiptDataUri(params: GenerateReceiptParams): string {
   const doc = buildReceiptPdf(params);
   return doc.output('datauristring');
 }
+

@@ -55,3 +55,4 @@ export const StatCard: React.FC<StatCardProps> = ({
     </div>
   );
 };
+

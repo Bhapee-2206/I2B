@@ -61,3 +61,4 @@ export const useSettings = () => {
   if (!context) throw new Error('useSettings must be used within a SettingsProvider');
   return context;
 };
+

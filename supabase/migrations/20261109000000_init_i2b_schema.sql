@@ -298,3 +298,4 @@ BEGIN
     DROP POLICY IF EXISTS "Allow anon all migration_records" ON public.migration_records;
     CREATE POLICY "Allow anon all migration_records" ON public.migration_records FOR ALL USING (true) WITH CHECK (true);
 END $$;
+

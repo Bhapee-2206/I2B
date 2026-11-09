@@ -443,3 +443,4 @@ export const FeeStructures: React.FC = () => {
     </div>
   );
 };
+

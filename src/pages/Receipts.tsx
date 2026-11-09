@@ -428,3 +428,4 @@ export const Receipts: React.FC = () => {
     </div>
   );
 };
+
