@@ -17,7 +17,9 @@ import {
   Download,
   BookOpen,
   Edit,
-  Clock
+  Clock,
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
@@ -36,10 +38,17 @@ import {
   getProgrammes,
   createEnrollment,
   updateEnrollment,
+  promoteEnrollment,
   getReceipts,
   getFeeStructures,
   recordPayment
 } from '../services/dbService';
+import {
+  SUBJECT_CLASSES,
+  HINDI_GRADES,
+  findMatchingFee,
+  getNextPromotedClass
+} from '../utils/feeLookup';
 import { useSettings } from '../context/SettingsContext';
 import { downloadReceiptPdf, printReceiptPdf } from '../services/receiptPdfService';
 import { buildReceiptWhatsAppMessage, launchManualWhatsAppShare, confirmWhatsAppSent } from '../services/whatsappService';
@@ -85,6 +94,14 @@ export const StudentDetail: React.FC = () => {
   const [payNotes, setPayNotes] = useState('');
   const [payAllocations, setPayAllocations] = useState<{ [id: string]: number }>({});
   const [paySubmitting, setPaySubmitting] = useState(false);
+
+  // Promote Modal state
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+  const [enrolToPromote, setEnrolToPromote] = useState<Enrollment | null>(null);
+  const [promoteNextClass, setPromoteNextClass] = useState('');
+  const [promoteNewFee, setPromoteNewFee] = useState<number>(0);
+  const [promoteNotes, setPromoteNotes] = useState('');
+  const [promoteSubmitting, setPromoteSubmitting] = useState(false);
 
   const loadStudentData = async () => {
     if (!id) return;
@@ -166,16 +183,11 @@ export const StudentDetail: React.FC = () => {
   };
 
   const handleClassChangeInEnrol = (cls: string) => {
-    const match = feeStructures.find(
-      (f) =>
-        f.programme_id === enrolForm.programme_id &&
-        f.class_or_grade.toLowerCase() === cls.toLowerCase() &&
-        (f.board || '').toLowerCase() === (enrolForm.board || '').toLowerCase()
-    );
+    const fee = findMatchingFee(feeStructures, enrolForm.programme_id, cls, enrolForm.board);
     setEnrolForm(prev => ({
       ...prev,
       class_or_grade: cls,
-      agreed_fee: match ? match.monthly_fee : prev.agreed_fee
+      agreed_fee: fee !== null && fee > 0 ? fee : prev.agreed_fee
     }));
   };
 
@@ -192,6 +204,56 @@ export const StudentDetail: React.FC = () => {
       notes: '',
     });
     setEnrolModalOpen(true);
+  };
+
+  const openPromoteModal = (enr: Enrollment) => {
+    setEnrolToPromote(enr);
+    const prog = programmes.find(p => p.id === enr.programme_id);
+    const nextClass = getNextPromotedClass(enr.class_or_grade, prog) || enr.class_or_grade;
+    setPromoteNextClass(nextClass);
+
+    // Auto-fetch fee for the next class
+    const fee = findMatchingFee(feeStructures, enr.programme_id, nextClass, enr.board);
+    setPromoteNewFee(fee !== null && fee > 0 ? fee : Number(enr.agreed_fee));
+    setPromoteNotes('');
+    setPromoteModalOpen(true);
+  };
+
+  const handlePromoteClassChange = (selectedClass: string) => {
+    setPromoteNextClass(selectedClass);
+    if (!enrolToPromote) return;
+    const fee = findMatchingFee(feeStructures, enrolToPromote.programme_id, selectedClass, enrolToPromote.board);
+    if (fee !== null && fee > 0) {
+      setPromoteNewFee(fee);
+    }
+  };
+
+  const handlePromoteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrolToPromote) return;
+    if (!promoteNextClass) {
+      toast.error('Please select the promoted class');
+      return;
+    }
+    if (promoteNewFee <= 0) {
+      toast.error('Fee must be greater than zero');
+      return;
+    }
+
+    setPromoteSubmitting(true);
+    try {
+      await promoteEnrollment(enrolToPromote.id, promoteNextClass, promoteNewFee, promoteNotes);
+      toast.success(
+        `🎉 Successfully promoted to ${promoteNextClass}! New fee: ₹${promoteNewFee}`
+      );
+      setPromoteModalOpen(false);
+      setEnrolToPromote(null);
+      await loadStudentData();
+    } catch (err: any) {
+      toast.error(err.message || 'Promotion failed');
+    } finally {
+      setPromoteSubmitting(false);
+    }
   };
 
   const openInlinePaymentModal = () => {
@@ -480,8 +542,8 @@ export const StudentDetail: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                      <div className="text-left sm:text-right">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      <div className="text-left sm:text-right mr-1">
                         <span className="text-[10px] text-slate-400 block">Agreed Monthly Fee</span>
                         <span className="text-base font-extrabold text-emerald-600">
                           ₹{Number(enr.agreed_fee).toLocaleString('en-IN')}
@@ -490,10 +552,19 @@ export const StudentDetail: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                        icon={<GraduationCap className="w-3.5 h-3.5 text-emerald-600" />}
+                        onClick={() => openPromoteModal(enr)}
+                      >
+                        Promote
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         icon={<Edit className="w-3.5 h-3.5" />}
                         onClick={() => handleOpenEditEnrolment(enr)}
                       >
-                        Edit Fee
+                        Edit
                       </Button>
                     </div>
                   </div>
@@ -962,6 +1033,112 @@ export const StudentDetail: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* ===================================================================== */}
+      {/* PROMOTE ENROLMENT MODAL                                               */}
+      {/* ===================================================================== */}
+      {enrolToPromote && (
+        <Modal
+          isOpen={promoteModalOpen}
+          onClose={() => setPromoteModalOpen(false)}
+          title={`Promote ${student.name}`}
+          subtitle={`Current Class: ${enrolToPromote.class_or_grade} • Programme: ${enrolToPromote.programme?.name}`}
+          maxWidth="md"
+        >
+          <form onSubmit={handlePromoteSubmit} className="space-y-4 py-2">
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs space-y-1.5 text-emerald-950">
+              <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>Academic Standard Progression</span>
+              </div>
+              <p className="text-emerald-800/90 leading-relaxed">
+                Promote student to the next academic grade. The tuition fee for the next class is auto-calculated below.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div>
+                <span className="text-slate-400 block">Current Class:</span>
+                <strong className="text-slate-800 text-sm">{enrolToPromote.class_or_grade}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Current Agreed Fee:</span>
+                <strong className="text-slate-800 text-sm">₹{enrolToPromote.agreed_fee}</strong>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Promote to Next Class / Grade <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={promoteNextClass}
+                onChange={(e) => handlePromoteClassChange(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+              >
+                <option value="">— Select Next Class —</option>
+                {(enrolToPromote.programme?.code === 'SUBJECT' ? SUBJECT_CLASSES : HINDI_GRADES).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                New Agreed Monthly Fee (₹) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="50"
+                  min="0"
+                  value={promoteNewFee || ''}
+                  onChange={(e) => setPromoteNewFee(parseFloat(e.target.value) || 0)}
+                  placeholder="Auto-calculated from fee matrix"
+                  required
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 py-2 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                ✓ Auto-fetched from institutional fee structure
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Promotion Notes</label>
+              <input
+                type="text"
+                value={promoteNotes}
+                onChange={(e) => setPromoteNotes(e.target.value)}
+                placeholder="e.g. Annual academic promotion"
+                className="w-full rounded-lg border border-slate-300 p-2 text-xs"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPromoteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                loading={promoteSubmitting}
+                icon={<GraduationCap className="w-4 h-4" />}
+              >
+                Confirm Promotion
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

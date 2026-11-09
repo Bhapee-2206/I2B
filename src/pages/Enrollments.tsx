@@ -7,6 +7,9 @@ import {
   ChevronRight,
   Edit,
   X,
+  GraduationCap,
+  ArrowUpRight,
+  Sparkles
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
@@ -24,12 +27,15 @@ import {
   getFeeStructures,
   createEnrollment,
   updateEnrollment,
+  promoteEnrollment,
 } from '../services/dbService';
+import {
+  SUBJECT_CLASSES,
+  HINDI_GRADES,
+  findMatchingFee,
+  getNextPromotedClass
+} from '../utils/feeLookup';
 import { toast } from 'sonner';
-
-// Class options by programme type
-const SUBJECT_CLASSES = ['LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
-const HINDI_GRADES = ['Basic', 'School', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
 function getClassOptions(prog?: Programme): string[] {
   if (!prog) return SUBJECT_CLASSES;
@@ -74,6 +80,14 @@ export const Enrollments: React.FC = () => {
   // Student search within modal
   const [studentSearch, setStudentSearch] = useState('');
 
+  // Promote Modal state
+  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+  const [enrolToPromote, setEnrolToPromote] = useState<Enrollment | null>(null);
+  const [promoteNextClass, setPromoteNextClass] = useState('');
+  const [promoteNewFee, setPromoteNewFee] = useState<number>(0);
+  const [promoteNotes, setPromoteNotes] = useState('');
+  const [promoteSubmitting, setPromoteSubmitting] = useState(false);
+
   const loadData = async () => {
     try {
       const [enrs, progs, stus, fees] = await Promise.all([
@@ -102,14 +116,14 @@ export const Enrollments: React.FC = () => {
   useEffect(() => {
     if (editingEnrol) return; // Don't override when editing
     if (!formData.programme_id || !formData.class_or_grade) return;
-    const match = feeStructures.find(
-      (f) =>
-        f.programme_id === formData.programme_id &&
-        f.class_or_grade.toLowerCase() === formData.class_or_grade.toLowerCase() &&
-        (f.board || '').toLowerCase() === (formData.board || '').toLowerCase()
+    const fee = findMatchingFee(
+      feeStructures,
+      formData.programme_id,
+      formData.class_or_grade,
+      formData.board
     );
-    if (match) {
-      setFormData((prev) => ({ ...prev, agreed_fee: match.monthly_fee }));
+    if (fee !== null && fee > 0) {
+      setFormData((prev) => ({ ...prev, agreed_fee: fee }));
     }
   }, [formData.programme_id, formData.class_or_grade, formData.board, feeStructures]);
 
@@ -128,6 +142,56 @@ export const Enrollments: React.FC = () => {
       notes: '',
     });
     setIsModalOpen(true);
+  };
+
+  const openPromoteModal = (enr: Enrollment) => {
+    setEnrolToPromote(enr);
+    const prog = programmes.find(p => p.id === enr.programme_id);
+    const nextClass = getNextPromotedClass(enr.class_or_grade, prog) || enr.class_or_grade;
+    setPromoteNextClass(nextClass);
+
+    // Auto-fetch fee for the next class
+    const fee = findMatchingFee(feeStructures, enr.programme_id, nextClass, enr.board);
+    setPromoteNewFee(fee !== null && fee > 0 ? fee : Number(enr.agreed_fee));
+    setPromoteNotes('');
+    setPromoteModalOpen(true);
+  };
+
+  const handlePromoteClassChange = (selectedClass: string) => {
+    setPromoteNextClass(selectedClass);
+    if (!enrolToPromote) return;
+    const fee = findMatchingFee(feeStructures, enrolToPromote.programme_id, selectedClass, enrolToPromote.board);
+    if (fee !== null && fee > 0) {
+      setPromoteNewFee(fee);
+    }
+  };
+
+  const handlePromoteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrolToPromote) return;
+    if (!promoteNextClass) {
+      toast.error('Please select the promoted class');
+      return;
+    }
+    if (promoteNewFee <= 0) {
+      toast.error('Fee must be greater than zero');
+      return;
+    }
+
+    setPromoteSubmitting(true);
+    try {
+      await promoteEnrollment(enrolToPromote.id, promoteNextClass, promoteNewFee, promoteNotes);
+      toast.success(
+        `🎉 Successfully promoted ${enrolToPromote.student?.name} to ${promoteNextClass}! New fee: ₹${promoteNewFee}`
+      );
+      setPromoteModalOpen(false);
+      setEnrolToPromote(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Promotion failed');
+    } finally {
+      setPromoteSubmitting(false);
+    }
   };
 
   const openEditModal = (enr: Enrollment) => {
@@ -339,14 +403,25 @@ export const Enrollments: React.FC = () => {
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                   <span>Start: {enr.start_date}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={<Edit className="w-3.5 h-3.5" />}
-                    onClick={() => openEditModal(enr)}
-                  >
-                    Edit
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      icon={<GraduationCap className="w-3.5 h-3.5 text-emerald-600" />}
+                      onClick={() => openPromoteModal(enr)}
+                    >
+                      Promote
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Edit className="w-3.5 h-3.5" />}
+                      onClick={() => openEditModal(enr)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -401,14 +476,26 @@ export const Enrollments: React.FC = () => {
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={<Edit className="w-3.5 h-3.5" />}
-                          onClick={() => openEditModal(enr)}
-                        >
-                          Edit Fee
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300"
+                            icon={<GraduationCap className="w-3.5 h-3.5 text-emerald-600" />}
+                            onClick={() => openPromoteModal(enr)}
+                            title="Promote to Next Class"
+                          >
+                            Promote
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Edit className="w-3.5 h-3.5" />}
+                            onClick={() => openEditModal(enr)}
+                          >
+                            Edit
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -583,6 +670,112 @@ export const Enrollments: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* ===================================================================== */}
+      {/* PROMOTE STUDENT MODAL                                                 */}
+      {/* ===================================================================== */}
+      {enrolToPromote && (
+        <Modal
+          isOpen={promoteModalOpen}
+          onClose={() => setPromoteModalOpen(false)}
+          title={`Promote Student: ${enrolToPromote.student?.name}`}
+          subtitle={`Current Class: ${enrolToPromote.class_or_grade} • Programme: ${enrolToPromote.programme?.name}`}
+          maxWidth="md"
+        >
+          <form onSubmit={handlePromoteSubmit} className="space-y-4 py-2">
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs space-y-1.5 text-emerald-950">
+              <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>Next Academic Class Progression</span>
+              </div>
+              <p className="text-emerald-800/90 leading-relaxed">
+                Promote <strong>{enrolToPromote.student?.name}</strong> to the next standard. The standard monthly tuition fee for the new class is auto-calculated below.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div>
+                <span className="text-slate-400 block">Current Class:</span>
+                <strong className="text-slate-800 text-sm">{enrolToPromote.class_or_grade}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Current Agreed Fee:</span>
+                <strong className="text-slate-800 text-sm">₹{enrolToPromote.agreed_fee}</strong>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Promote to Next Class / Grade <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={promoteNextClass}
+                onChange={(e) => handlePromoteClassChange(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+              >
+                <option value="">— Select Next Class —</option>
+                {getClassOptions(programmes.find(p => p.id === enrolToPromote.programme_id)).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                New Agreed Monthly Fee (₹) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="50"
+                  min="0"
+                  value={promoteNewFee || ''}
+                  onChange={(e) => setPromoteNewFee(parseFloat(e.target.value) || 0)}
+                  placeholder="Auto-calculated from fee matrix"
+                  required
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 py-2 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                ✓ Auto-fetched from institutional fee structure
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Promotion Notes / Reason</label>
+              <input
+                type="text"
+                value={promoteNotes}
+                onChange={(e) => setPromoteNotes(e.target.value)}
+                placeholder="e.g. Annual academic promotion to next grade"
+                className="w-full rounded-lg border border-slate-300 p-2 text-xs"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPromoteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                loading={promoteSubmitting}
+                icon={<GraduationCap className="w-4 h-4" />}
+              >
+                Confirm Promotion
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

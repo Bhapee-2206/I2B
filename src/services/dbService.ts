@@ -47,15 +47,28 @@ const LOCAL_STORAGE_KEYS = {
 
 // State flag to track whether Supabase schema is ready in PostgreSQL
 let supabaseSchemaReady: boolean | null = null;
+let supabaseCheckedTime = 0;
 
 export async function isSupabaseSchemaAvailable(): Promise<boolean> {
-  if (supabaseSchemaReady !== null) return supabaseSchemaReady;
+  // Cache check for 60 seconds so pages load instantaneously from local store
+  const now = Date.now();
+  if (supabaseSchemaReady !== null && (now - supabaseCheckedTime < 60000)) {
+    return supabaseSchemaReady;
+  }
   try {
-    const { error } = await supabase.from('programmes').select('id').limit(1);
-    supabaseSchemaReady = !error;
+    // 2-second timeout so page renders fast even if network / Supabase is cold
+    const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000));
+    const checkPromise = (async () => {
+      const { error } = await supabase.from('programmes').select('id').limit(1);
+      return !error;
+    })();
+
+    supabaseSchemaReady = await Promise.race([checkPromise, timeoutPromise]);
+    supabaseCheckedTime = Date.now();
     return supabaseSchemaReady;
   } catch {
     supabaseSchemaReady = false;
+    supabaseCheckedTime = Date.now();
     return false;
   }
 }
@@ -389,6 +402,51 @@ export async function updateEnrollment(id: string, updates: Partial<Enrollment>)
   }
   setLocal(LOCAL_STORAGE_KEYS.ENROLLMENTS, all);
   await logAudit('update_enrollment', 'enrollments', id, updates);
+  return updated;
+}
+
+export async function promoteEnrollment(
+  enrollmentId: string,
+  nextClass: string,
+  newAgreedFee: number,
+  notes?: string
+): Promise<Enrollment> {
+  const all = await getEnrollments();
+  const idx = all.findIndex(e => e.id === enrollmentId);
+  if (idx === -1) throw new Error('Enrollment not found');
+
+  const oldClass = all[idx].class_or_grade;
+  const oldFee = all[idx].agreed_fee;
+
+  const promotionNote = `Promoted from ${oldClass} (₹${oldFee}) to ${nextClass} (₹${newAgreedFee}) on ${new Date().toISOString().split('T')[0]}${notes ? ': ' + notes : ''}`;
+
+  const updated: Enrollment = {
+    ...all[idx],
+    class_or_grade: nextClass,
+    agreed_fee: newAgreedFee,
+    notes: all[idx].notes ? `${all[idx].notes} | ${promotionNote}` : promotionNote,
+    updated_at: new Date().toISOString()
+  };
+
+  all[idx] = updated;
+
+  const isOnline = await isSupabaseSchemaAvailable();
+  if (isOnline) {
+    await supabase.from('enrollments').update({
+      class_or_grade: updated.class_or_grade,
+      agreed_fee: updated.agreed_fee,
+      notes: updated.notes
+    }).eq('id', enrollmentId);
+  }
+
+  setLocal(LOCAL_STORAGE_KEYS.ENROLLMENTS, all);
+  await logAudit('promote_student', 'enrollments', enrollmentId, {
+    oldClass,
+    nextClass,
+    oldFee,
+    newAgreedFee
+  });
+
   return updated;
 }
 

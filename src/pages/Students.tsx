@@ -33,11 +33,14 @@ import {
   updateStudent,
   createEnrollment,
 } from '../services/dbService';
+import {
+  SUBJECT_CLASSES,
+  HINDI_GRADES,
+  findMatchingFee,
+  normalizeClassOrGrade
+} from '../utils/feeLookup';
 import { toast } from 'sonner';
 
-// Class options by programme type
-const SUBJECT_CLASSES = ['LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
-const HINDI_GRADES = ['Basic', 'School', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 const BOARD_OPTIONS_SUBJECT = ['Matric', 'CBSE'];
 const BOARD_OPTIONS_HINDI = ['Virtual', 'Online', 'Standard'];
 
@@ -125,14 +128,14 @@ export const Students: React.FC = () => {
   // Auto-lookup fee when programme/class/board changes
   useEffect(() => {
     if (!enrolData.programme_id || !enrolData.class_or_grade) return;
-    const match = feeStructures.find(
-      (f) =>
-        f.programme_id === enrolData.programme_id &&
-        f.class_or_grade.toLowerCase() === enrolData.class_or_grade.toLowerCase() &&
-        (f.board || '').toLowerCase() === (enrolData.board || '').toLowerCase()
+    const fee = findMatchingFee(
+      feeStructures,
+      enrolData.programme_id,
+      enrolData.class_or_grade,
+      enrolData.board
     );
-    if (match) {
-      setEnrolData((prev) => ({ ...prev, agreed_fee: match.monthly_fee }));
+    if (fee !== null && fee > 0) {
+      setEnrolData((prev) => ({ ...prev, agreed_fee: fee }));
     }
   }, [enrolData.programme_id, enrolData.class_or_grade, enrolData.board, feeStructures]);
 
