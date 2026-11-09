@@ -19,8 +19,8 @@ import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { EmptyState } from '../components/common/EmptyState';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
-import { Receipt, Payment, Student } from '../types';
-import { getReceipts, getPayments, getStudents } from '../services/dbService';
+import { Receipt, Payment, Student, Enrollment } from '../types';
+import { getReceipts, getPayments, getStudents, getEnrollments } from '../services/dbService';
 import { useSettings } from '../context/SettingsContext';
 import { downloadReceiptPdf, printReceiptPdf } from '../services/receiptPdfService';
 import {
@@ -36,6 +36,7 @@ export const Receipts: React.FC = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,14 +48,16 @@ export const Receipts: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [recs, pays, stus] = await Promise.all([
+      const [recs, pays, stus, enrs] = await Promise.all([
         getReceipts(),
         getPayments(),
         getStudents(),
+        getEnrollments(),
       ]);
       setReceipts(recs);
       setPayments(pays);
       setStudents(stus);
+      setEnrollments(enrs);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load receipts');
@@ -63,9 +66,11 @@ export const Receipts: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const getStudentEnrolmentSummary = (studentId: string) => {
+    const studentEnrs = enrollments.filter(e => e.student_id === studentId && e.status === 'active');
+    if (studentEnrs.length === 0) return 'Tuition / Programme Fee';
+    return studentEnrs.map(e => `${e.programme?.name || 'Programme'} (${e.class_or_grade})`).join(', ');
+  };
 
   const handleDownload = (rec: Receipt) => {
     const pay = payments.find((p) => p.id === rec.payment_id);
@@ -77,6 +82,7 @@ export const Receipts: React.FC = () => {
       payment: pay,
       student: stu,
       settings,
+      enrolmentInfo: getStudentEnrolmentSummary(stu.id),
     });
     toast.success('Downloaded PDF Receipt');
   };
@@ -91,8 +97,13 @@ export const Receipts: React.FC = () => {
       payment: pay,
       student: stu,
       settings,
+      enrolmentInfo: getStudentEnrolmentSummary(stu.id),
     });
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const openShareModal = (rec: Receipt) => {
     setActiveReceipt(rec);

@@ -595,6 +595,8 @@ export interface RecordPaymentPayload {
     invoice_id: string;
     allocated_amount: number;
   }[];
+  // Optional flag to allow direct/advance payment without existing invoice
+  is_direct_fee?: boolean;
 }
 
 export async function getPayments(): Promise<Payment[]> {
@@ -643,43 +645,92 @@ export async function recordPayment(payload: RecordPaymentPayload): Promise<{ pa
   const paymentId = crypto.randomUUID();
   const receiptId = crypto.randomUUID();
 
-  // Validate allocations
-  const totalAllocated = payload.allocations.reduce((sum, a) => sum + Number(a.allocated_amount), 0);
-  if (Math.abs(totalAllocated - payload.amount) > 0.01) {
-    throw new Error(`Total allocated amount (₹${totalAllocated}) must equal payment amount (₹${payload.amount})`);
-  }
-
   const paymentAllocations: PaymentAllocation[] = [];
+  const createdInvoices: Invoice[] = [];
 
-  // Update invoices
-  for (const alloc of payload.allocations) {
-    const invIdx = invoices.findIndex(i => i.id === alloc.invoice_id);
-    if (invIdx === -1) throw new Error(`Invoice ${alloc.invoice_id} not found`);
+  // Check if this is a direct fee payment without pre-existing invoices
+  if (payload.allocations.length === 0 && payload.amount > 0) {
+    const invPrefix = settings.invoice_prefix || 'INV';
+    const invCount = invoices.length + 1;
+    const invId = crypto.randomUUID();
+    const invNum = `${invPrefix}-${todayStr}-${String(invCount).padStart(3, '0')}`;
+    const pDate = new Date(payload.payment_date);
+    const billingMonth = pDate.getMonth() + 1;
+    const billingYear = pDate.getFullYear();
 
-    const inv = invoices[invIdx];
-    const newPaid = Number(inv.paid_amount) + Number(alloc.allocated_amount);
-    if (newPaid > Number(inv.total_amount) + 0.01) {
-      throw new Error(`Allocation of ₹${alloc.allocated_amount} exceeds invoice ${inv.invoice_number} balance of ₹${inv.balance_amount}`);
-    }
-
-    const newBalance = Number(inv.total_amount) - newPaid;
-    const newStatus = newBalance <= 0 ? 'paid' : newPaid > 0 ? 'partially_paid' : inv.status;
-
-    invoices[invIdx] = {
-      ...inv,
-      paid_amount: newPaid,
-      balance_amount: newBalance,
-      status: newStatus,
-      updated_at: new Date().toISOString()
+    const directInvoice: Invoice = {
+      id: invId,
+      invoice_number: invNum,
+      student_id: payload.student_id,
+      billing_month: billingMonth,
+      billing_year: billingYear,
+      invoice_date: payload.payment_date,
+      due_date: payload.payment_date,
+      total_amount: payload.amount,
+      paid_amount: payload.amount,
+      balance_amount: 0,
+      status: 'paid',
+      notes: payload.notes ? `Direct Receipt: ${payload.notes}` : 'Direct payment receipt',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: [
+        {
+          id: crypto.randomUUID(),
+          invoice_id: invId,
+          description: 'Direct Tuition / Programme Fee Payment',
+          amount: payload.amount,
+          created_at: new Date().toISOString()
+        }
+      ]
     };
+
+    invoices.unshift(directInvoice);
+    createdInvoices.push(directInvoice);
 
     paymentAllocations.push({
       id: crypto.randomUUID(),
       payment_id: paymentId,
-      invoice_id: alloc.invoice_id,
-      allocated_amount: Number(alloc.allocated_amount),
+      invoice_id: invId,
+      allocated_amount: payload.amount,
       created_at: new Date().toISOString()
     });
+  } else {
+    // Validate allocations
+    const totalAllocated = payload.allocations.reduce((sum, a) => sum + Number(a.allocated_amount), 0);
+    if (Math.abs(totalAllocated - payload.amount) > 0.01) {
+      throw new Error(`Total allocated amount (₹${totalAllocated}) must equal payment amount (₹${payload.amount})`);
+    }
+
+    // Update invoices
+    for (const alloc of payload.allocations) {
+      const invIdx = invoices.findIndex(i => i.id === alloc.invoice_id);
+      if (invIdx === -1) throw new Error(`Invoice ${alloc.invoice_id} not found`);
+
+      const inv = invoices[invIdx];
+      const newPaid = Number(inv.paid_amount) + Number(alloc.allocated_amount);
+      if (newPaid > Number(inv.total_amount) + 0.01) {
+        throw new Error(`Allocation of ₹${alloc.allocated_amount} exceeds invoice ${inv.invoice_number} balance of ₹${inv.balance_amount}`);
+      }
+
+      const newBalance = Number(inv.total_amount) - newPaid;
+      const newStatus = newBalance <= 0 ? 'paid' : newPaid > 0 ? 'partially_paid' : inv.status;
+
+      invoices[invIdx] = {
+        ...inv,
+        paid_amount: newPaid,
+        balance_amount: newBalance,
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      };
+
+      paymentAllocations.push({
+        id: crypto.randomUUID(),
+        payment_id: paymentId,
+        invoice_id: alloc.invoice_id,
+        allocated_amount: Number(alloc.allocated_amount),
+        created_at: new Date().toISOString()
+      });
+    }
   }
 
   // Calculate remaining student balance across all invoices
@@ -719,6 +770,9 @@ export async function recordPayment(payload: RecordPaymentPayload): Promise<{ pa
   // Supabase persist if online
   const isOnline = await isSupabaseSchemaAvailable();
   if (isOnline) {
+    if (createdInvoices.length > 0) {
+      await supabase.from('invoices').insert(createdInvoices);
+    }
     const { allocations, receipt: r, student, ...dbPayment } = payment;
     await supabase.from('payments').insert(dbPayment);
     await supabase.from('payment_allocations').insert(paymentAllocations);

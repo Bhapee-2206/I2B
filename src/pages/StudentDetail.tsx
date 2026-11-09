@@ -27,7 +27,7 @@ import { Modal } from '../components/common/Modal';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
-import { Student, Enrollment, Invoice, Payment, Programme, Receipt } from '../types';
+import { Student, Enrollment, Invoice, Payment, Programme, Receipt, PaymentMethod, FeeStructure } from '../types';
 import {
   getStudentById,
   getEnrollmentsByStudent,
@@ -36,7 +36,9 @@ import {
   getProgrammes,
   createEnrollment,
   updateEnrollment,
-  getReceipts
+  getReceipts,
+  getFeeStructures,
+  recordPayment
 } from '../services/dbService';
 import { useSettings } from '../context/SettingsContext';
 import { downloadReceiptPdf, printReceiptPdf } from '../services/receiptPdfService';
@@ -55,6 +57,7 @@ export const StudentDetail: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Active tab: 'enrolments' | 'invoices' | 'payments' | 'ledger'
@@ -73,16 +76,27 @@ export const StudentDetail: React.FC = () => {
     notes: '',
   });
 
+  // Inline Payment Modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payAmount, setPayAmount] = useState<number>(0);
+  const [payMethod, setPayMethod] = useState<PaymentMethod>('Cash');
+  const [payRef, setPayRef] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  const [payAllocations, setPayAllocations] = useState<{ [id: string]: number }>({});
+  const [paySubmitting, setPaySubmitting] = useState(false);
+
   const loadStudentData = async () => {
     if (!id) return;
     try {
-      const [stu, enrs, allInvs, allPays, allRecs, progs] = await Promise.all([
+      const [stu, enrs, allInvs, allPays, allRecs, progs, fees] = await Promise.all([
         getStudentById(id),
         getEnrollmentsByStudent(id),
         getInvoices(),
         getPayments(),
         getReceipts(),
         getProgrammes(),
+        getFeeStructures(),
       ]);
 
       setStudent(stu);
@@ -91,6 +105,7 @@ export const StudentDetail: React.FC = () => {
       setPayments(allPays.filter((p) => p.student_id === id));
       setReceipts(allRecs.filter((r) => r.student_id === id));
       setProgrammes(progs);
+      setFeeStructures(fees);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load student details');
@@ -131,18 +146,113 @@ export const StudentDetail: React.FC = () => {
   // Ledger
   const ledgerEntries = buildStudentLedger(student.id, invoices, payments);
 
+  const SUBJECT_CLASSES = ['LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+  const HINDI_GRADES = ['Basic', 'School', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+
+  const selectedProg = programmes.find(p => p.id === enrolForm.programme_id);
+  const classOptions = selectedProg?.code === 'SUBJECT' ? SUBJECT_CLASSES : HINDI_GRADES;
+  const boardOptions = selectedProg?.code === 'SUBJECT' ? ['Matric', 'CBSE'] : ['Virtual', 'Online', 'Standard'];
+
+  const handleProgrammeChangeInEnrol = (progId: string) => {
+    const prog = programmes.find(p => p.id === progId);
+    const boards = prog?.code === 'SUBJECT' ? ['Matric', 'CBSE'] : ['Virtual', 'Online', 'Standard'];
+    setEnrolForm(prev => ({
+      ...prev,
+      programme_id: progId,
+      class_or_grade: '',
+      board: boards[0] || 'Matric',
+      agreed_fee: 0,
+    }));
+  };
+
+  const handleClassChangeInEnrol = (cls: string) => {
+    const match = feeStructures.find(
+      (f) =>
+        f.programme_id === enrolForm.programme_id &&
+        f.class_or_grade.toLowerCase() === cls.toLowerCase() &&
+        (f.board || '').toLowerCase() === (enrolForm.board || '').toLowerCase()
+    );
+    setEnrolForm(prev => ({
+      ...prev,
+      class_or_grade: cls,
+      agreed_fee: match ? match.monthly_fee : prev.agreed_fee
+    }));
+  };
+
   const handleOpenAddEnrolment = () => {
     setEditingEnrol(null);
+    const firstProg = programmes[0];
     setEnrolForm({
-      programme_id: programmes[0]?.id || '',
-      class_or_grade: '1st',
-      board: 'Matric',
-      agreed_fee: 600,
+      programme_id: firstProg?.id || '',
+      class_or_grade: '',
+      board: firstProg?.code === 'SUBJECT' ? 'Matric' : 'Virtual',
+      agreed_fee: 0,
       start_date: new Date().toISOString().split('T')[0],
       status: 'active',
       notes: '',
     });
     setEnrolModalOpen(true);
+  };
+
+  const openInlinePaymentModal = () => {
+    setPayDate(new Date().toISOString().split('T')[0]);
+    setPayMethod('Cash');
+    setPayRef('');
+    setPayNotes('');
+
+    const studentUnpaid = invoices.filter(
+      (i) => i.status !== 'cancelled' && i.status !== 'paid'
+    );
+    const allocMap: { [id: string]: number } = {};
+    let totalBal = 0;
+    if (studentUnpaid.length > 0) {
+      allocMap[studentUnpaid[0].id] = Number(studentUnpaid[0].balance_amount);
+      totalBal = Number(studentUnpaid[0].balance_amount);
+    } else {
+      totalBal = totalMonthlyAgreed > 0 ? totalMonthlyAgreed : 500;
+    }
+    setPayAllocations(allocMap);
+    setPayAmount(totalBal > 0 ? totalBal : 500);
+    setPaymentModalOpen(true);
+  };
+
+  const handleInlinePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (payAmount <= 0) {
+      toast.error('Payment amount must be greater than zero');
+      return;
+    }
+
+    const allocArray = Object.entries(payAllocations)
+      .filter(([_, amt]) => Number(amt) > 0)
+      .map(([invoice_id, allocated_amount]) => ({
+        invoice_id,
+        allocated_amount: Number(allocated_amount),
+      }));
+
+    const unpaidInvs = invoices.filter(i => i.status !== 'cancelled' && i.status !== 'paid');
+    const isDirect = unpaidInvs.length === 0 || allocArray.length === 0;
+
+    setPaySubmitting(true);
+    try {
+      const { payment, receipt } = await recordPayment({
+        student_id: student.id,
+        payment_date: payDate,
+        amount: Number(payAmount),
+        payment_method: payMethod,
+        transaction_reference: payRef,
+        notes: payNotes,
+        allocations: isDirect ? [] : allocArray,
+      });
+
+      toast.success(`Payment ${payment.payment_number} recorded! Receipt ${receipt.receipt_number} issued.`);
+      setPaymentModalOpen(false);
+      await loadStudentData();
+    } catch (err: any) {
+      toast.error(err.message || 'Payment recording failed');
+    } finally {
+      setPaySubmitting(false);
+    }
   };
 
   const handleOpenEditEnrolment = (enr: Enrollment) => {
@@ -262,7 +372,7 @@ export const StudentDetail: React.FC = () => {
               variant="primary"
               size="sm"
               icon={<CreditCard className="w-4 h-4" />}
-              onClick={() => navigate(`/payments?studentId=${student.id}`)}
+              onClick={openInlinePaymentModal}
             >
               Record Payment
             </Button>
@@ -615,46 +725,82 @@ export const StudentDetail: React.FC = () => {
         maxWidth="md"
       >
         <form onSubmit={handleSaveEnrolment} className="space-y-4 py-2">
-          <Select
-            label="Select Programme"
-            value={enrolForm.programme_id}
-            onChange={(e) => setEnrolForm({ ...enrolForm, programme_id: e.target.value })}
-            options={programmes.map((p) => ({ value: p.id, label: p.name }))}
-            required
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Class / Grade"
-              value={enrolForm.class_or_grade}
-              onChange={(e) => setEnrolForm({ ...enrolForm, class_or_grade: e.target.value })}
-              placeholder="e.g. 6th, Basic, 3rd"
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Programme <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={enrolForm.programme_id}
+              onChange={(e) => handleProgrammeChangeInEnrol(e.target.value)}
               required
-            />
-            <Select
-              label="Curriculum Board / Category"
-              value={enrolForm.board}
-              onChange={(e) => setEnrolForm({ ...enrolForm, board: e.target.value })}
-              options={[
-                { value: 'Matric', label: 'Matric' },
-                { value: 'CBSE', label: 'CBSE' },
-                { value: 'Virtual', label: 'Virtual' },
-                { value: 'Online', label: 'Online' },
-                { value: 'Standard', label: 'Standard' },
-              ]}
-            />
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+            >
+              <option value="">— Select programme —</option>
+              {programmes.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Agreed Monthly Fee (₹)"
-              type="number"
-              step="50"
-              value={enrolForm.agreed_fee}
-              onChange={(e) => setEnrolForm({ ...enrolForm, agreed_fee: parseFloat(e.target.value) || 0 })}
-              required
-              helperText="Agreed fee retained for monthly billing"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Class / Grade <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={enrolForm.class_or_grade}
+                onChange={(e) => handleClassChangeInEnrol(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+              >
+                <option value="">— Select class —</option>
+                {classOptions.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Curriculum Board / Category
+              </label>
+              <select
+                value={enrolForm.board}
+                onChange={(e) => setEnrolForm({ ...enrolForm, board: e.target.value })}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+              >
+                {boardOptions.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Agreed Monthly Fee (₹) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="50"
+                  min="0"
+                  value={enrolForm.agreed_fee || ''}
+                  onChange={(e) => setEnrolForm({ ...enrolForm, agreed_fee: parseFloat(e.target.value) || 0 })}
+                  placeholder="Auto-populated from fee structure"
+                  required
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 py-2 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+              </div>
+              {enrolForm.agreed_fee > 0 && !editingEnrol && (
+                <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                  ✓ Auto-populated from fee structure
+                </p>
+              )}
+            </div>
+
             <Input
               label="Start Date"
               type="date"
@@ -691,6 +837,127 @@ export const StudentDetail: React.FC = () => {
               size="sm"
             >
               {editingEnrol ? 'Update Enrolment' : 'Save Enrolment'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Inline Record Payment Modal */}
+      <Modal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        title={`Record Payment — ${student.name}`}
+        subtitle={`Student ID: ${student.student_id}`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleInlinePaymentSubmit} className="space-y-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Payment Date"
+              type="date"
+              value={payDate}
+              onChange={(e) => setPayDate(e.target.value)}
+              required
+            />
+            <Select
+              label="Payment Method"
+              value={payMethod}
+              onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
+              options={[
+                { value: 'Cash', label: 'Cash at Counter' },
+                { value: 'UPI', label: 'UPI (GPay / PhonePe / Paytm)' },
+                { value: 'Bank Transfer', label: 'Bank Transfer' },
+                { value: 'Cheque', label: 'Cheque' },
+                { value: 'Other', label: 'Other Mode' },
+              ]}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Transaction / Reference #"
+              value={payRef}
+              onChange={(e) => setPayRef(e.target.value)}
+              placeholder="e.g. UPI Ref, Bank UTR"
+            />
+            <Input
+              label="Payment Amount (₹)"
+              type="number"
+              step="10"
+              value={payAmount}
+              onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
+              required
+            />
+          </div>
+
+          {/* Allocation or Direct Mode */}
+          {invoices.filter(i => i.status !== 'cancelled' && i.status !== 'paid').length > 0 ? (
+            <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+              <div className="bg-slate-100 px-3.5 py-2 font-bold text-slate-800">
+                Allocate to Invoices
+              </div>
+              <div className="divide-y divide-slate-100 p-2 space-y-2">
+                {invoices
+                  .filter(i => i.status !== 'cancelled' && i.status !== 'paid')
+                  .map((inv) => (
+                    <div key={inv.id} className="p-2 bg-slate-50 rounded flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-bold font-mono text-slate-900">{inv.invoice_number}</span>
+                        <p className="text-[11px] text-slate-500">Balance: ₹{inv.balance_amount}</p>
+                      </div>
+                      <div className="w-28">
+                        <input
+                          type="number"
+                          max={inv.balance_amount}
+                          value={payAllocations[inv.id] || 0}
+                          onChange={(e) => {
+                            const updated = { ...payAllocations, [inv.id]: parseFloat(e.target.value) || 0 };
+                            setPayAllocations(updated);
+                            setPayAmount(Object.values(updated).reduce((s, v) => s + v, 0));
+                          }}
+                          className="w-full text-right font-bold text-xs p-1 border border-slate-300 rounded"
+                        />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-800 border border-emerald-200">
+              <span className="font-bold block mb-0.5">✓ Direct Fee Receipt</span>
+              Recording will generate an instant official receipt of ₹{payAmount} for {student.name}.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Administrative Notes</label>
+            <input
+              type="text"
+              value={payNotes}
+              onChange={(e) => setPayNotes(e.target.value)}
+              placeholder="e.g. Paid in full at desk"
+              className="w-full rounded-lg border border-slate-300 p-2 text-xs"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPaymentModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={paySubmitting}
+              icon={<CheckCircle2 className="w-4 h-4" />}
+            >
+              Confirm & Issue Receipt
             </Button>
           </div>
         </form>

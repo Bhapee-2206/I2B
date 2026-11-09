@@ -5,15 +5,14 @@ import {
   Search,
   Plus,
   Phone,
-  MessageSquare,
   BookOpen,
   ChevronRight,
   Filter,
   Edit,
-  Archive,
   CheckCircle2,
   Calendar,
-  X
+  X,
+  UserPlus
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
@@ -24,15 +23,35 @@ import { Card, CardBody } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
 import { EmptyState } from '../components/common/EmptyState';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
-import { Student, Enrollment, Programme } from '../types';
+import { Student, Enrollment, Programme, FeeStructure } from '../types';
 import {
   getStudents,
   getEnrollments,
   getProgrammes,
+  getFeeStructures,
   createStudent,
-  updateStudent
+  updateStudent,
+  createEnrollment,
 } from '../services/dbService';
 import { toast } from 'sonner';
+
+// Class options by programme type
+const SUBJECT_CLASSES = ['LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+const HINDI_GRADES = ['Basic', 'School', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+const BOARD_OPTIONS_SUBJECT = ['Matric', 'CBSE'];
+const BOARD_OPTIONS_HINDI = ['Virtual', 'Online', 'Standard'];
+
+function getClassOptions(programme: Programme | undefined): string[] {
+  if (!programme) return SUBJECT_CLASSES;
+  if (programme.code === 'SUBJECT') return SUBJECT_CLASSES;
+  return HINDI_GRADES;
+}
+
+function getBoardOptions(programme: Programme | undefined): string[] {
+  if (!programme) return [...BOARD_OPTIONS_SUBJECT, ...BOARD_OPTIONS_HINDI];
+  if (programme.code === 'SUBJECT') return BOARD_OPTIONS_SUBJECT;
+  return BOARD_OPTIONS_HINDI;
+}
 
 export const Students: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +59,7 @@ export const Students: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters & search
@@ -51,8 +71,9 @@ export const Students: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [includeEnrolment, setIncludeEnrolment] = useState(true);
 
-  // Form fields
+  // Student form fields
   const [formData, setFormData] = useState({
     name: '',
     parent_name: '',
@@ -64,16 +85,31 @@ export const Students: React.FC = () => {
     notes: '',
   });
 
+  // Enrolment fields (for new student only)
+  const [enrolData, setEnrolData] = useState({
+    programme_id: '',
+    class_or_grade: '',
+    board: 'Matric',
+    agreed_fee: 0,
+  });
+
   const loadData = async () => {
     try {
-      const [stus, enrs, progs] = await Promise.all([
+      const [stus, enrs, progs, fees] = await Promise.all([
         getStudents(),
         getEnrollments(),
         getProgrammes(),
+        getFeeStructures(),
       ]);
       setStudents(stus);
       setEnrollments(enrs);
       setProgrammes(progs);
+      setFeeStructures(fees);
+
+      // Set default enrolment programme
+      if (progs.length > 0 && !enrolData.programme_id) {
+        setEnrolData(prev => ({ ...prev, programme_id: progs[0].id }));
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to load students');
@@ -86,8 +122,23 @@ export const Students: React.FC = () => {
     loadData();
   }, []);
 
+  // Auto-lookup fee when programme/class/board changes
+  useEffect(() => {
+    if (!enrolData.programme_id || !enrolData.class_or_grade) return;
+    const match = feeStructures.find(
+      (f) =>
+        f.programme_id === enrolData.programme_id &&
+        f.class_or_grade.toLowerCase() === enrolData.class_or_grade.toLowerCase() &&
+        (f.board || '').toLowerCase() === (enrolData.board || '').toLowerCase()
+    );
+    if (match) {
+      setEnrolData((prev) => ({ ...prev, agreed_fee: match.monthly_fee }));
+    }
+  }, [enrolData.programme_id, enrolData.class_or_grade, enrolData.board, feeStructures]);
+
   const openAddModal = () => {
     setEditingStudent(null);
+    setIncludeEnrolment(true);
     setFormData({
       name: '',
       parent_name: '',
@@ -98,12 +149,19 @@ export const Students: React.FC = () => {
       status: 'active',
       notes: '',
     });
+    setEnrolData({
+      programme_id: programmes[0]?.id || '',
+      class_or_grade: '',
+      board: 'Matric',
+      agreed_fee: 0,
+    });
     setIsModalOpen(true);
   };
 
   const openEditModal = (stu: Student, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setEditingStudent(stu);
+    setIncludeEnrolment(false);
     setFormData({
       name: stu.name,
       parent_name: stu.parent_name || '',
@@ -117,11 +175,33 @@ export const Students: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleProgrammeChange = (progId: string) => {
+    const prog = programmes.find((p) => p.id === progId);
+    const boards = getBoardOptions(prog);
+    setEnrolData((prev) => ({
+      ...prev,
+      programme_id: progId,
+      class_or_grade: '',
+      board: boards[0] || 'Matric',
+      agreed_fee: 0,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error('Student name is required');
       return;
+    }
+    if (!editingStudent && includeEnrolment) {
+      if (!enrolData.programme_id || !enrolData.class_or_grade) {
+        toast.error('Please select programme and class/grade for enrolment');
+        return;
+      }
+      if (enrolData.agreed_fee <= 0) {
+        toast.error('Agreed monthly fee must be greater than zero');
+        return;
+      }
     }
 
     setFormSubmitting(true);
@@ -131,7 +211,21 @@ export const Students: React.FC = () => {
         toast.success(`Updated details for ${formData.name}`);
       } else {
         const created = await createStudent(formData);
-        toast.success(`Student ${created.name} created successfully! (ID: ${created.student_id})`);
+        if (includeEnrolment) {
+          await createEnrollment({
+            student_id: created.id,
+            programme_id: enrolData.programme_id,
+            class_or_grade: enrolData.class_or_grade,
+            board: enrolData.board,
+            agreed_fee: enrolData.agreed_fee,
+            start_date: formData.admission_date,
+            status: 'active',
+            is_verified: true,
+          });
+          toast.success(`${created.name} registered & enrolled! (ID: ${created.student_id})`);
+        } else {
+          toast.success(`Student ${created.name} created! (ID: ${created.student_id})`);
+        }
       }
       setIsModalOpen(false);
       await loadData();
@@ -167,6 +261,10 @@ export const Students: React.FC = () => {
 
     return matchesQuery && matchesStatus && matchesProg;
   });
+
+  const selectedProg = programmes.find((p) => p.id === enrolData.programme_id);
+  const classOptions = getClassOptions(selectedProg);
+  const boardOptions = getBoardOptions(selectedProg);
 
   return (
     <div className="space-y-5">
@@ -255,9 +353,7 @@ export const Students: React.FC = () => {
         />
       ) : (
         <div className="space-y-4">
-          {/* ================================================================= */}
-          {/* MOBILE VIEW: Responsive Cards (Screens < 768px)                   */}
-          {/* ================================================================= */}
+          {/* MOBILE VIEW */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredStudents.map((stu) => {
               const stuEnrols = studentEnrollmentMap.get(stu.id) || [];
@@ -297,7 +393,6 @@ export const Students: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Enrolment chips */}
                   <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                       {stuEnrols.length === 0 ? (
@@ -328,9 +423,7 @@ export const Students: React.FC = () => {
             })}
           </div>
 
-          {/* ================================================================= */}
-          {/* DESKTOP / TABLET VIEW: High-density Table (Screens >= 768px)      */}
-          {/* ================================================================= */}
+          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white rounded-xl border border-slate-200/90 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
@@ -440,10 +533,15 @@ export const Students: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingStudent ? `Edit Student: ${editingStudent.name}` : 'Register New Student'}
-        subtitle="Manage primary institutional record"
+        subtitle={editingStudent ? 'Update personal & contact information' : 'Register student and enrol in programme in one step'}
         maxWidth="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* ── SECTION 1: STUDENT DETAILS ── */}
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider pb-1 border-b border-slate-100">
+            Student Information
+          </div>
+
           <Input
             label="Student Full Name"
             value={formData.name}
@@ -505,18 +603,103 @@ export const Students: React.FC = () => {
             />
           </div>
 
-          <div className="text-left">
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Administrative Notes
-            </label>
-            <textarea
-              rows={2}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Special instructions, fee concessions, or notes..."
-              className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60"
-            />
-          </div>
+          {/* ── SECTION 2: ENROLMENT (new student only) ── */}
+          {!editingStudent && (
+            <>
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Programme Enrolment
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs text-slate-500">Include enrolment</span>
+                  <div
+                    onClick={() => setIncludeEnrolment(!includeEnrolment)}
+                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                      includeEnrolment ? 'bg-emerald-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        includeEnrolment ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              {includeEnrolment && (
+                <div className="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-xl space-y-3">
+                  <Select
+                    label="Programme"
+                    value={enrolData.programme_id}
+                    onChange={(e) => handleProgrammeChange(e.target.value)}
+                    options={programmes.map((p) => ({ value: p.id, label: p.name }))}
+                    required
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Class / Grade <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={enrolData.class_or_grade}
+                        onChange={(e) => setEnrolData({ ...enrolData, class_or_grade: e.target.value })}
+                        required={includeEnrolment}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                      >
+                        <option value="">— Select class —</option>
+                        {classOptions.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Board / Mode
+                      </label>
+                      <select
+                        value={enrolData.board}
+                        onChange={(e) => setEnrolData({ ...enrolData, board: e.target.value })}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                      >
+                        {boardOptions.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Agreed Monthly Fee (₹) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="50"
+                        min="0"
+                        value={enrolData.agreed_fee || ''}
+                        onChange={(e) =>
+                          setEnrolData({ ...enrolData, agreed_fee: parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Auto-filled from fee structure"
+                        required={includeEnrolment}
+                        className="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 py-2 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+                      />
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                    </div>
+                    {enrolData.agreed_fee > 0 && (
+                      <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                        ✓ Fee auto-populated from fee structure
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
             <Button
@@ -532,8 +715,9 @@ export const Students: React.FC = () => {
               variant="primary"
               size="sm"
               loading={formSubmitting}
+              icon={!editingStudent ? <UserPlus className="w-4 h-4" /> : undefined}
             >
-              {editingStudent ? 'Save Changes' : 'Create Student'}
+              {editingStudent ? 'Save Changes' : 'Register & Enrol'}
             </Button>
           </div>
         </form>
@@ -541,4 +725,3 @@ export const Students: React.FC = () => {
     </div>
   );
 };
-

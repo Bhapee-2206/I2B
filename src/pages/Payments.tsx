@@ -26,12 +26,13 @@ import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { EmptyState } from '../components/common/EmptyState';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
-import { Payment, Student, Invoice, Receipt, PaymentMethod } from '../types';
+import { Payment, Student, Invoice, Receipt, PaymentMethod, Enrollment } from '../types';
 import {
   getPayments,
   getStudents,
   getInvoices,
   getReceipts,
+  getEnrollments,
   recordPayment,
   reversePayment
 } from '../services/dbService';
@@ -53,6 +54,8 @@ export const Payments: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [studentSearchModal, setStudentSearchModal] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -84,16 +87,18 @@ export const Payments: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [pays, stus, invs, recs] = await Promise.all([
+      const [pays, stus, invs, recs, enrs] = await Promise.all([
         getPayments(),
         getStudents(),
         getInvoices(),
         getReceipts(),
+        getEnrollments(),
       ]);
       setPayments(pays);
       setStudents(stus);
       setInvoices(invs);
       setReceipts(recs);
+      setEnrollments(enrs);
 
       // Check query params to prefill payment modal
       const qStudentId = searchParams.get('studentId');
@@ -116,6 +121,7 @@ export const Payments: React.FC = () => {
   const openPaymentModalFor = (studentId?: string, invoiceId?: string) => {
     const sId = studentId || students[0]?.id || '';
     setSelectedStudentId(sId);
+    setStudentSearchModal('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setPaymentMethod('Cash');
     setTxRef('');
@@ -139,6 +145,11 @@ export const Payments: React.FC = () => {
       // Allocate to first unpaid invoice
       allocMap[studentUnpaid[0].id] = Number(studentUnpaid[0].balance_amount);
       totalBal = Number(studentUnpaid[0].balance_amount);
+    } else {
+      // If no unpaid invoices, suggest fee from student's active enrollment
+      const studentEnrs = enrollments.filter(e => e.student_id === sId && e.status === 'active');
+      const monthlyFee = studentEnrs.reduce((sum, e) => sum + Number(e.agreed_fee), 0);
+      totalBal = monthlyFee > 0 ? monthlyFee : 500;
     }
 
     setAllocations(allocMap);
@@ -156,6 +167,10 @@ export const Payments: React.FC = () => {
     if (studentUnpaid.length > 0) {
       allocMap[studentUnpaid[0].id] = Number(studentUnpaid[0].balance_amount);
       sum = Number(studentUnpaid[0].balance_amount);
+    } else {
+      const studentEnrs = enrollments.filter(e => e.student_id === sId && e.status === 'active');
+      const monthlyFee = studentEnrs.reduce((s, e) => s + Number(e.agreed_fee), 0);
+      sum = monthlyFee > 0 ? monthlyFee : 500;
     }
     setAllocations(allocMap);
     setPaymentAmount(sum > 0 ? sum : 500);
@@ -186,10 +201,9 @@ export const Payments: React.FC = () => {
         allocated_amount: Number(allocated_amount),
       }));
 
-    if (allocArray.length === 0) {
-      toast.error('Please allocate payment to at least one invoice');
-      return;
-    }
+    // If student has unpaid invoices and allocations are selected, allocate to them
+    // Otherwise allow direct payment without existing invoices
+    const isDirect = studentUnpaidInvoices.length === 0 || allocArray.length === 0;
 
     setSubmitting(true);
     try {
@@ -200,7 +214,7 @@ export const Payments: React.FC = () => {
         payment_method: paymentMethod,
         transaction_reference: txRef,
         notes,
-        allocations: allocArray,
+        allocations: isDirect ? [] : allocArray,
       });
 
       toast.success(`Payment ${payment.payment_number} recorded! Receipt ${receipt.receipt_number} issued.`);
@@ -219,6 +233,12 @@ export const Payments: React.FC = () => {
     }
   };
 
+  const getStudentEnrolmentSummary = (studentId: string) => {
+    const studentEnrs = enrollments.filter(e => e.student_id === studentId && e.status === 'active');
+    if (studentEnrs.length === 0) return 'Tuition / Programme Fee';
+    return studentEnrs.map(e => `${e.programme?.name || 'Programme'} (${e.class_or_grade})`).join(', ');
+  };
+
   const handleDownloadReceipt = (rec: Receipt, pay: Payment) => {
     const stu = students.find((s) => s.id === pay.student_id);
     if (!stu) return;
@@ -227,6 +247,7 @@ export const Payments: React.FC = () => {
       payment: pay,
       student: stu,
       settings,
+      enrolmentInfo: getStudentEnrolmentSummary(pay.student_id),
     });
     toast.success('Downloaded PDF Receipt');
   };
@@ -239,6 +260,7 @@ export const Payments: React.FC = () => {
       payment: pay,
       student: stu,
       settings,
+      enrolmentInfo: getStudentEnrolmentSummary(pay.student_id),
     });
   };
 
@@ -588,13 +610,37 @@ export const Payments: React.FC = () => {
         maxWidth="lg"
       >
         <form onSubmit={handleRecordPaymentSubmit} className="space-y-4 py-2">
-          <Select
-            label="Select Student"
-            value={selectedStudentId}
-            onChange={(e) => handleStudentChange(e.target.value)}
-            options={students.map((s) => ({ value: s.id, label: `${s.name} (${s.student_id})` }))}
-            required
-          />
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Select Student <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Search student by name or ID..."
+              value={studentSearchModal}
+              onChange={(e) => setStudentSearchModal(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs mb-1.5 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 focus:outline-none"
+            />
+            <select
+              value={selectedStudentId}
+              onChange={(e) => handleStudentChange(e.target.value)}
+              required
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
+            >
+              <option value="">— Select Student —</option>
+              {students
+                .filter(s =>
+                  !studentSearchModal ||
+                  s.name.toLowerCase().includes(studentSearchModal.toLowerCase()) ||
+                  s.student_id.toLowerCase().includes(studentSearchModal.toLowerCase())
+                )
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.student_id})
+                  </option>
+                ))}
+            </select>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
@@ -646,8 +692,9 @@ export const Payments: React.FC = () => {
             </div>
 
             {studentUnpaidInvoices.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500 bg-slate-50/50">
-                No unpaid invoices found for this student. Generate an invoice first or record advance.
+              <div className="p-4 text-center text-xs text-slate-600 bg-emerald-50/50">
+                <span className="font-semibold text-emerald-800 block mb-1">Direct Receipt Mode</span>
+                No pending invoices found. Recording will create an instant official payment receipt for ₹{paymentAmount || 0}.
               </div>
             ) : (
               <div className="divide-y divide-slate-100 p-2 space-y-2">
