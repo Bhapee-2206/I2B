@@ -155,7 +155,8 @@ const App = {
         StudentsModule.loadStudents(),
         MonthlyFeesModule.loadInvoices(),
         PaymentsModule.loadPayments(),
-        ReceiptsModule.loadReceipts()
+        ReceiptsModule.loadReceipts(),
+        typeof AttendanceModule !== 'undefined' ? AttendanceModule.loadProgrammeRules() : Promise.resolve()
       ]);
       App.navigateTo(App.currentRoute);
     } catch (_) {}
@@ -236,6 +237,7 @@ const App = {
       'dashboard': 'Dashboard',
       'students': 'Student Directory',
       'student-profile': 'Student Profile',
+      'attendance': 'Attendance',
       'fee-collection': 'Fee Collection',
       'monthly-fees': 'Monthly Fees',
       'fee-structure': 'Fee Structure',
@@ -258,6 +260,9 @@ const App = {
         break;
       case 'students':
         StudentsModule.renderStudentsTable();
+        break;
+      case 'attendance':
+        AttendanceModule.init();
         break;
       case 'fee-collection':
         PaymentsModule.renderPaymentsTable();

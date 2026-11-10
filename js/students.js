@@ -1035,6 +1035,11 @@ const StudentsModule = {
       }
     }
 
+    // Render Programme Attendance Summary
+    if (typeof AttendanceModule !== 'undefined' && AttendanceModule.renderStudentProfileAttendance) {
+      AttendanceModule.renderStudentProfileAttendance(s.id);
+    }
+
     Utils.renderIcons();
   },
 

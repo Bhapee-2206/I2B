@@ -3,7 +3,7 @@
  * Offline App Shell Caching & Installability
  */
 
-const CACHE_NAME = 'edutrack-pwa-v2.1';
+const CACHE_NAME = 'edutrack-pwa-v2.2';
 const APP_SHELL_ASSETS = [
   './',
   './index.html',
@@ -13,12 +13,14 @@ const APP_SHELL_ASSETS = [
   './css/components.css',
   './css/dashboard.css',
   './css/responsive.css',
+  './css/attendance.css',
   './js/config.js',
   './js/utils.js',
   './js/auth.js',
   './js/programmes.js',
   './js/fees.js',
   './js/students.js',
+  './js/attendance.js',
   './js/monthly-fees.js',
   './js/payments.js',
   './js/receipts.js',
@@ -108,3 +110,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+

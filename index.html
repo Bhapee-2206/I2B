@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/dashboard.css">
   <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/attendance.css">
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -58,6 +59,11 @@
         <a href="#students" class="sidebar-nav-item" data-route="students">
           <i data-lucide="users"></i>
           <span>Students</span>
+        </a>
+
+        <a href="#attendance" class="sidebar-nav-item" data-route="attendance">
+          <i data-lucide="calendar-check"></i>
+          <span>Attendance</span>
         </a>
 
         <a href="#monthly-fees" class="sidebar-nav-item" data-route="monthly-fees">
@@ -513,6 +519,14 @@
               </div>
             </div>
 
+            <!-- Programme Attendance Summary -->
+            <div style="margin-bottom: 1.5rem;">
+              <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">Programme Attendance Summary</h3>
+              <div id="profile-attendance-container">
+                <!-- Dynamically populated by AttendanceModule.renderStudentProfileAttendance -->
+              </div>
+            </div>
+
             <!-- Invoices Ledger -->
             <div style="margin-bottom: 1.5rem;">
               <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">Invoices Ledger</h3>
@@ -553,6 +567,236 @@
                   </thead>
                   <tbody id="profile-payments-body">
                     <!-- Dynamically populated -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================================================================
+             3.5 ATTENDANCE MANAGEMENT VIEW
+             =================================================================== -->
+        <section class="page-view" id="view-attendance">
+          <div class="attendance-page-header">
+            <div>
+              <h1 class="attendance-page-title">Attendance</h1>
+              <p class="attendance-page-subtitle">Daily student attendance and attendance history.</p>
+            </div>
+          </div>
+
+          <!-- Attendance Section Navigation Tabs -->
+          <div class="attendance-tabs-nav">
+            <button type="button" class="attendance-tab-btn active" data-tab="register">
+              <i data-lucide="calendar-check" style="width: 15px; height: 15px;"></i> Daily Register
+            </button>
+            <button type="button" class="attendance-tab-btn" data-tab="history">
+              <i data-lucide="history" style="width: 15px; height: 15px;"></i> History
+            </button>
+            <button type="button" class="attendance-tab-btn" data-tab="reports">
+              <i data-lucide="bar-chart-3" style="width: 15px; height: 15px;"></i> Reports
+            </button>
+          </div>
+
+          <!-- SECTION 1: DAILY REGISTER -->
+          <div id="attendance-section-register">
+            <div class="card" style="margin-bottom: 1.25rem;">
+              <div class="attendance-control-toolbar">
+                <div class="attendance-filter-group">
+                  <div class="attendance-input-wrap">
+                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Date</label>
+                    <input type="date" id="attendance-date-input" class="form-control" style="width: auto; min-width: 150px; font-weight: 600;" onchange="AttendanceModule.onDateChange(this.value)">
+                  </div>
+
+                  <div class="attendance-input-wrap">
+                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Programme</label>
+                    <select id="attendance-programme-select" class="form-control" style="width: auto; min-width: 170px; font-weight: 600;" onchange="AttendanceModule.onProgrammeChange(this.value)">
+                      <option value="">Loading programmes...</option>
+                    </select>
+                  </div>
+
+                  <div class="attendance-input-wrap" style="flex: 1; min-width: 200px;">
+                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Search Student</label>
+                    <div style="position: relative;">
+                      <input type="text" id="attendance-search-input" class="form-control" placeholder="Search by name or ID..." oninput="AttendanceModule.renderRoster()">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="attendance-toolbar-actions">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-all-present" onclick="AttendanceModule.markAllPresent()" title="Mark all students Present in form">
+                    <i data-lucide="check-check" style="width: 14px; height: 14px; color: var(--status-paid);"></i> Mark All Present
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-no-class" onclick="AttendanceModule.markNoClass()" title="Record holiday or cancellation">
+                    <i data-lucide="calendar-off" style="width: 14px; height: 14px; color: var(--text-muted);"></i> Mark No Class
+                  </button>
+                </div>
+              </div>
+
+              <!-- Live Summary Strip -->
+              <div class="attendance-summary-strip">
+                <div class="attendance-summary-pill total">
+                  <span class="pill-label">Total</span>
+                  <span class="pill-count" id="att-summary-total">0</span>
+                </div>
+                <div class="attendance-summary-pill present">
+                  <span class="pill-label">Present</span>
+                  <span class="pill-count" id="att-summary-present">0</span>
+                </div>
+                <div class="attendance-summary-pill absent">
+                  <span class="pill-label">Absent</span>
+                  <span class="pill-count" id="att-summary-absent">0</span>
+                </div>
+                <div class="attendance-summary-pill leave">
+                  <span class="pill-label">Leave</span>
+                  <span class="pill-count" id="att-summary-leave">0</span>
+                </div>
+                <div class="attendance-summary-pill unmarked">
+                  <span class="pill-label">Unmarked</span>
+                  <span class="pill-count" id="att-summary-unmarked">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cancelled / Holiday Banner -->
+            <div id="attendance-cancelled-banner" class="attendance-cancelled-banner" style="display: none;"></div>
+
+            <!-- Empty State for non-scheduled days -->
+            <div id="attendance-empty-state" style="display: none;"></div>
+
+            <!-- Active Student Attendance Register -->
+            <div id="attendance-roster-container">
+              <!-- Desktop Table -->
+              <div class="card attendance-desktop-roster">
+                <div class="table-responsive">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 40px;">#</th>
+                        <th style="width: 120px;">Student ID</th>
+                        <th>Student Name</th>
+                        <th>Class / Grade</th>
+                        <th style="text-align: right; width: 240px;">Attendance Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="attendance-roster-tbody">
+                      <tr>
+                        <td colspan="5" class="text-center text-muted" style="padding: 2.5rem 1rem;">Loading student roster...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Mobile Student Cards -->
+              <div id="attendance-mobile-cards" class="attendance-mobile-cards"></div>
+
+              <!-- Sticky Save Action Footer Bar -->
+              <div class="attendance-save-bar">
+                <div class="attendance-save-info">
+                  <i data-lucide="info" style="width: 14px; height: 14px; color: var(--accent-blue);"></i>
+                  <span>Ensure all students are marked before submitting.</span>
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-save-attendance" onclick="AttendanceModule.saveAttendance()">
+                  <i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Attendance
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 2: ATTENDANCE HISTORY -->
+          <div id="attendance-section-history" style="display: none;">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Past Attendance Sessions</div>
+                  <div class="card-subtitle">Review previous registers or reopen to correct attendance</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.loadHistory()">
+                    <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i> Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Programme</th>
+                      <th>Students</th>
+                      <th>Present</th>
+                      <th>Absent</th>
+                      <th>Leave</th>
+                      <th>Status</th>
+                      <th style="text-align: right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="attendance-history-tbody">
+                    <tr>
+                      <td colspan="8" class="text-center text-muted" style="padding: 2rem;">Loading history...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 3: ATTENDANCE REPORTS & ANALYTICS -->
+          <div id="attendance-section-reports" style="display: none;">
+            <div class="attendance-kpi-grid">
+              <div class="attendance-kpi-card">
+                <div class="attendance-kpi-label">Total Present Marks</div>
+                <div class="attendance-kpi-value" id="att-rep-stat-present" style="color: var(--status-paid);">0</div>
+              </div>
+              <div class="attendance-kpi-card">
+                <div class="attendance-kpi-label">Total Absent Marks</div>
+                <div class="attendance-kpi-value" id="att-rep-stat-absent" style="color: var(--status-unpaid);">0</div>
+              </div>
+              <div class="attendance-kpi-card">
+                <div class="attendance-kpi-label">Approved Leaves</div>
+                <div class="attendance-kpi-value" id="att-rep-stat-leave" style="color: #d97706;">0</div>
+              </div>
+              <div class="attendance-kpi-card">
+                <div class="attendance-kpi-label">Institution Attendance Rate</div>
+                <div class="attendance-kpi-value" id="att-rep-stat-rate" style="color: var(--accent-blue);">0%</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Student-Wise Programme Attendance Report</div>
+                  <div class="card-subtitle">Calculated attendance rate (leaves & cancelled sessions excluded from denominator)</div>
+                </div>
+                <div class="card-actions">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.exportToExcel()">
+                    <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: #16a34a;"></i> Export to Excel
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.loadReports()">
+                    <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i> Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Student ID</th>
+                      <th>Student & Programme</th>
+                      <th>Sessions Held</th>
+                      <th>Present Days</th>
+                      <th>Absent Days</th>
+                      <th>Leave Days</th>
+                      <th>Attendance %</th>
+                    </tr>
+                  </thead>
+                  <tbody id="attendance-reports-tbody">
+                    <tr>
+                      <td colspan="7" class="text-center text-muted" style="padding: 2rem;">Loading attendance statistics...</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -1199,6 +1443,50 @@
 
             <hr style="border: none; border-top: 1px solid var(--border-light); margin: 2rem 0;">
 
+            <!-- Programme Attendance Schedules -->
+            <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 0.75rem;">
+              <div>
+                <div class="card-title">Programme Attendance Schedules</div>
+                <div class="card-subtitle">Default offline timetable rules stored in the database</div>
+              </div>
+            </div>
+
+            <div class="table-responsive" style="margin-bottom: 1.5rem;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Programme</th>
+                    <th>Attendance Status</th>
+                    <th>Scheduled Days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Subject</strong></td>
+                    <td><span class="badge badge-paid">Enabled</span></td>
+                    <td>Monday, Tuesday, Wednesday, Thursday, Friday, Saturday</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Hindi</strong></td>
+                    <td><span class="badge badge-paid">Enabled</span></td>
+                    <td>Monday, Wednesday, Friday</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Weekend Hindi</strong></td>
+                    <td><span class="badge badge-paid">Enabled</span></td>
+                    <td>Saturday, Sunday</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Online Hindi</strong></td>
+                    <td><span class="badge badge-neutral">Not Applicable</span></td>
+                    <td>No offline classes (Online coaching)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: 2rem 0;">
+
             <!-- System Longevity & Permanent Data Backup -->
             <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 0.75rem;">
               <div>
@@ -1242,14 +1530,14 @@
         <span>Students</span>
       </a>
 
+      <a href="#attendance" class="mobile-nav-item" data-route="attendance">
+        <i data-lucide="calendar-check"></i>
+        <span>Attendance</span>
+      </a>
+
       <a href="#monthly-fees" class="mobile-nav-item" data-route="monthly-fees">
         <i data-lucide="calendar"></i>
         <span>Fees</span>
-      </a>
-
-      <a href="#fee-collection" class="mobile-nav-item" data-route="fee-collection">
-        <i data-lucide="credit-card"></i>
-        <span>Payments</span>
       </a>
 
       <a href="#more" class="mobile-nav-item" id="mobile-nav-more-btn" data-route="more">
@@ -1270,6 +1558,11 @@
       </button>
     </div>
     <div class="bottom-sheet-grid">
+      <a href="#fee-collection" class="bottom-sheet-item">
+        <i data-lucide="credit-card"></i>
+        <span>Payments</span>
+      </a>
+
       <a href="#fee-structure" class="bottom-sheet-item">
         <i data-lucide="sliders"></i>
         <span>Fee Structure</span>
@@ -2034,6 +2327,7 @@
   <script src="js/settings.js"></script>
   <script src="js/excel-import.js"></script>
   <script src="js/dashboard.js"></script>
+  <script src="js/attendance.js"></script>
   <script src="js/app.js"></script>
 
 </body>
