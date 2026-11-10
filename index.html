@@ -696,11 +696,90 @@
              6. FEE STRUCTURE VIEW
              =================================================================== -->
         <section class="page-view" id="view-fee-structure">
+          
+          <!-- 1. INTERACTIVE PARENT FEE CALCULATOR & QUICK QUOTE CARD -->
+          <div class="card" style="border-top: 4px solid var(--accent-blue);">
+            <div class="card-header">
+              <div>
+                <div class="card-title">
+                  <i data-lucide="calculator" style="color: var(--accent-blue); width: 20px; height: 20px;"></i>
+                  <span>Parent Fee Calculator & Quick Quote</span>
+                </div>
+                <div class="card-subtitle">Select a student's class and programmes to instantly quote an accurate, transparent monthly fee to parents</div>
+              </div>
+            </div>
+
+            <div class="fee-calc-grid">
+              <!-- Left: Selectors & Programme Checklist -->
+              <div>
+                <div class="form-row" style="margin-bottom: 0.85rem;">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="calc-quote-class">Student Class / Grade</label>
+                    <select id="calc-quote-class" class="form-control" onchange="FeesModule.updateParentQuote()">
+                      <!-- Populated dynamically with clean natural classes -->
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="calc-quote-board">School Board</label>
+                    <select id="calc-quote-board" class="form-control" onchange="FeesModule.updateParentQuote()">
+                      <option value="Matric">Matric</option>
+                      <option value="CBSE">CBSE</option>
+                      <option value="Virtual">Virtual</option>
+                      <option value="Online">Online</option>
+                    </select>
+                  </div>
+                </div>
+
+                <label class="form-label" style="margin-bottom: 0.4rem;">Select Enrolment Programmes:</label>
+                <div id="calc-programmes-list" class="calc-prog-list">
+                  <!-- Populated dynamically with interactive programme cards -->
+                </div>
+              </div>
+
+              <!-- Right: Live Quote Box -->
+              <div class="quote-box">
+                <div>
+                  <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+                    Parent Quotation Summary
+                  </div>
+                  <div id="quote-target-display" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.5rem;">
+                    5th Standard • Matric
+                  </div>
+                  <div id="quote-total-display" style="font-size: 2.2rem; font-weight: 800; color: var(--accent-blue); line-height: 1.1; margin-bottom: 0.75rem;">
+                    ₹0 <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">/ month</span>
+                  </div>
+
+                  <div style="border-top: 1px solid var(--border-light); padding-top: 0.65rem; margin-bottom: 1rem;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase;">Fee Breakdown:</div>
+                    <div id="quote-breakdown-list">
+                      <!-- Itemized fees -->
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                  <button class="btn btn-primary" onclick="FeesModule.enrolWithQuote()" style="flex: 1; min-height: 42px; justify-content: center;">
+                    <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
+                    <span>Enrol Student With This Fee</span>
+                  </button>
+                  <button class="btn btn-secondary" onclick="FeesModule.copyQuoteText()" title="Copy Quote Text for WhatsApp / SMS">
+                    <i data-lucide="copy" style="width: 15px; height: 15px;"></i>
+                    <span>Copy Quote</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. FEE STRUCTURE DIRECTORY -->
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">Fee Structure Management</div>
-                <div class="card-subtitle">Tuition fees per programme, class/grade and board (Single Source of Truth)</div>
+                <div class="card-title">
+                  <i data-lucide="table-2" style="width: 18px; height: 18px;"></i>
+                  <span>Fee Structure Directory</span>
+                </div>
+                <div class="card-subtitle">Tuition fee rates per programme, class/grade and board (Naturally ordered)</div>
               </div>
               <div class="card-actions">
                 <button class="btn btn-primary btn-sm" onclick="FeesModule.openAddModal()">
@@ -709,22 +788,18 @@
               </div>
             </div>
 
-            <div class="filter-bar">
-              <select id="fee-structure-filter-prog" class="form-control" style="width: auto; min-width: 200px;" onchange="FeesModule.renderFeeStructureTable(this.value)">
-                <option value="">All Programmes (Matrix)</option>
-                <option value="b0000000-0000-0000-0000-000000000001">Subject</option>
-                <option value="b0000000-0000-0000-0000-000000000002">Hindi</option>
-                <option value="b0000000-0000-0000-0000-000000000003">Weekend Hindi</option>
-                <option value="b0000000-0000-0000-0000-000000000004">Online Hindi</option>
-              </select>
+            <!-- Programme Filter Pills Strip -->
+            <div class="prog-filter-tabs" id="fee-programme-filter-tabs">
+              <!-- Populated dynamically -->
             </div>
 
-            <div class="table-responsive">
+            <!-- Desktop Table View -->
+            <div class="table-responsive desktop-table-container">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Programme</th>
                     <th>Class / Grade</th>
+                    <th>Programme</th>
                     <th>Board / Category</th>
                     <th>Monthly Fee</th>
                     <th>Status</th>
@@ -735,6 +810,11 @@
                   <!-- Dynamically populated -->
                 </tbody>
               </table>
+            </div>
+
+            <!-- Mobile Fee Cards View (Zero Horizontal Scroll!) -->
+            <div class="mobile-cards-list" id="fee-structure-mobile-cards">
+              <!-- Dynamically populated mobile cards -->
             </div>
           </div>
         </section>
@@ -1645,12 +1725,34 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Class / Grade <span class="required">*</span></label>
-              <input type="text" id="fee-class" class="form-control" placeholder="e.g. 5th or Basic" required>
+              <select id="fee-class" class="form-control" required>
+                <option value="LKG">LKG</option>
+                <option value="UKG">UKG</option>
+                <option value="1st">1st Standard</option>
+                <option value="2nd">2nd Standard</option>
+                <option value="3rd">3rd Standard</option>
+                <option value="4th">4th Standard</option>
+                <option value="5th">5th Standard</option>
+                <option value="6th">6th Standard</option>
+                <option value="7th">7th Standard</option>
+                <option value="8th">8th Standard</option>
+                <option value="9th">9th Standard</option>
+                <option value="10th">10th Standard</option>
+                <option value="11th">11th Standard</option>
+                <option value="12th">12th Standard</option>
+                <option value="Basic">Basic Level (Hindi)</option>
+              </select>
             </div>
 
             <div class="form-group">
               <label class="form-label">Board / Category</label>
-              <input type="text" id="fee-board" class="form-control" placeholder="e.g. Matric, CBSE, Virtual">
+              <select id="fee-board" class="form-control">
+                <option value="Matric">Matric</option>
+                <option value="CBSE">CBSE</option>
+                <option value="Virtual">Virtual</option>
+                <option value="Online">Online</option>
+                <option value="">Universal / No Board</option>
+              </select>
             </div>
           </div>
 

@@ -182,6 +182,8 @@ const App = {
         MonthlyFeesModule.renderMonthlyFeesTable();
         break;
       case 'fee-structure':
+        FeesModule.initParentCalculator();
+        FeesModule.renderProgrammeTabs();
         FeesModule.renderFeeStructureTable();
         break;
       case 'promotions':
