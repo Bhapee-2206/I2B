@@ -28,6 +28,8 @@ const SettingsModule = {
         const defaultSettings = {
           institution_name: 'I2B Educational Institution',
           subtitle: 'Student & Monthly Fee Management',
+          contact_email: 'i2btutioncentre@gmail.com',
+          contact_phone: '+91 6385577966 / +91 9345999260',
           currency_symbol: '₹',
           default_due_day: 10,
           receipt_prefix: 'REC',
@@ -96,9 +98,9 @@ const SettingsModule = {
       document.getElementById('setting-org-subtitle').value = s.subtitle || '';
       document.getElementById('setting-org-tagline').value = s.tagline || '';
       document.getElementById('setting-org-address').value = s.address || '';
-      document.getElementById('setting-org-phone').value = s.contact_phone || '';
-      document.getElementById('setting-org-email').value = s.contact_email || '';
-      document.getElementById('setting-org-whatsapp').value = s.whatsapp_number || '';
+      document.getElementById('setting-org-phone').value = s.contact_phone || '+91 6385577966 / +91 9345999260';
+      document.getElementById('setting-org-email').value = s.contact_email || 'i2btutioncentre@gmail.com';
+      document.getElementById('setting-org-whatsapp').value = s.whatsapp_number || '+91 6385577966';
       document.getElementById('setting-currency-symbol').value = s.currency_symbol || '₹';
       document.getElementById('setting-due-day').value = s.default_due_day || 10;
       document.getElementById('setting-receipt-prefix').value = s.receipt_prefix || 'REC';
@@ -106,6 +108,8 @@ const SettingsModule = {
       document.getElementById('setting-student-prefix').value = s.student_prefix || 'STU';
       document.getElementById('setting-receipt-footer').value = s.receipt_footer || '';
     }
+
+    SettingsModule.populateCredentialsForm();
   },
 
   // Render Academic Years List
@@ -207,6 +211,53 @@ const SettingsModule = {
     } catch (err) {
       console.error("Save settings error:", err);
       Utils.showToast("Error", err.message || "Failed to save settings", "error");
+    }
+  },
+
+  // Populate Administrator Credentials Form
+  populateCredentialsForm: () => {
+    const creds = AuthModule.getCredentials();
+    const userInp = document.getElementById('setting-cred-username');
+    if (userInp) {
+      userInp.value = creds.username;
+    }
+  },
+
+  // Update Administrator Login Credentials
+  updateLoginCredentials: async (e) => {
+    e.preventDefault();
+    const currentPass = document.getElementById('setting-cred-current-pass').value;
+    const newUsername = document.getElementById('setting-cred-username').value;
+    const newPass = document.getElementById('setting-cred-new-pass').value;
+    const confirmPass = document.getElementById('setting-cred-confirm-pass').value;
+
+    if (newPass !== confirmPass) {
+      Utils.showToast("Password Mismatch", "New password and Confirm password do not match.", "error");
+      return;
+    }
+
+    const btn = document.getElementById('btn-update-credentials');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span>Updating...</span>`;
+    }
+
+    try {
+      await AuthModule.updateCredentials(currentPass, newUsername, newPass);
+      Utils.showToast("Credentials Updated", "Administrator ID and password updated successfully! Please use these credentials for your next login.", "success", 6000);
+      document.getElementById('setting-cred-current-pass').value = '';
+      document.getElementById('setting-cred-new-pass').value = '';
+      document.getElementById('setting-cred-confirm-pass').value = '';
+      SettingsModule.populateCredentialsForm();
+    } catch (err) {
+      Utils.showToast("Update Failed", err.message || "Failed to update administrator credentials", "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        Utils.renderIcons();
+      }
     }
   }
 };

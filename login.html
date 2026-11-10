@@ -166,8 +166,19 @@
   <script>
     Utils.renderIcons();
 
-    // Check if session already active
+    // Check if session already active and load active administrator ID
     document.addEventListener('DOMContentLoaded', async () => {
+      const creds = AuthModule.getCredentials();
+      const emailInp = document.getElementById('login-email');
+      const passInp = document.getElementById('login-password');
+      if (emailInp) {
+        emailInp.value = creds.username;
+        emailInp.placeholder = creds.username;
+      }
+      if (passInp) {
+        passInp.value = creds.password;
+        passInp.placeholder = creds.password;
+      }
       await AuthModule.init();
     });
 

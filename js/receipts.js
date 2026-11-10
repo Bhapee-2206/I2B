@@ -176,9 +176,9 @@ const ReceiptsModule = {
     document.getElementById('receipt-view-ref').textContent = p?.transaction_reference || 'None';
     document.getElementById('receipt-view-balance').textContent = Utils.formatCurrency(r.remaining_balance);
 
-    document.getElementById('receipt-institution-name').textContent = inst?.institution_name || 'EduTrack Institution';
-    document.getElementById('receipt-institution-address').textContent = inst?.address || '';
-    document.getElementById('receipt-footer-text').textContent = inst?.receipt_footer || 'Thank you for your payment!';
+    document.getElementById('receipt-institution-name').textContent = inst?.institution_name || 'I2B Educational Institution';
+    document.getElementById('receipt-institution-address').textContent = inst?.address || 'Contact: +91 6385577966 / +91 9345999260 • i2btutioncentre@gmail.com';
+    document.getElementById('receipt-footer-text').textContent = inst?.receipt_footer || 'Thank you for your prompt payment! This is an official computer-generated receipt.';
 
     const banner = document.getElementById('receipt-success-banner');
     if (banner) {
@@ -213,12 +213,14 @@ const ReceiptsModule = {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text(inst?.institution_name || "EDUTRACK INSTITUTION", 14, 11);
+    doc.text(inst?.institution_name || "I2B EDUCATIONAL INSTITUTION", 14, 11);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text(inst?.subtitle || "Student & Monthly Fee Management", 14, 17);
-    doc.text(inst?.contact_phone ? `Phone: ${inst.contact_phone} | Email: ${inst.contact_email || ''}` : '', 14, 22);
+    const phone = inst?.contact_phone || '+91 6385577966 / +91 9345999260';
+    const email = inst?.contact_email || 'i2btutioncentre@gmail.com';
+    doc.text(`Phone: ${phone} | Email: ${email}`, 14, 22);
 
     // Receipt Box
     doc.setFillColor(241, 245, 249);
@@ -331,8 +333,7 @@ const ReceiptsModule = {
     window.print();
   },
 
-  // FREE Native WhatsApp Receipt Sharing (Web Share API + Desktop Fallback)
-  // No Meta API, no paid services, 100% free
+  // Direct WhatsApp Receipt Sharing (Text Only, No PDF, Direct Target or Manual Fallback)
   shareViaWhatsApp: async (receiptId = null) => {
     let r = ReceiptsModule.currentReceipt;
     if (receiptId && (!r || r.id !== receiptId)) {
@@ -356,74 +357,66 @@ const ReceiptsModule = {
 
     ReceiptsModule.currentReceipt = r;
     const s = r.students;
+    const p = r.payments;
     const inst = AppState.institution;
-    const orgName = inst?.institution_name || "EduTrack Tuition Centre";
+    const orgName = inst?.institution_name || "I2B Educational Institution";
 
-    const msg = `Dear Parent,
+    // Format receipt variables
+    const studentName = s?.name || 'Student';
+    const studentId = s?.student_id || 'STU';
+    const receiptNo = r.receipt_number || 'REC';
+    const paymentNo = p?.payment_number || (receiptNo.startsWith('REC-') ? receiptNo.replace('REC-', 'PAY-') : 'PAY-' + receiptNo);
+    const date = r.issue_date || new Date().toISOString().slice(0, 10);
+    const amountVal = parseFloat(r.amount_paid) || 0;
+    const amountPaid = amountVal.toFixed(2);
+    const paymentMethod = (p?.payment_method || 'UPI').toUpperCase();
 
-We have received your tuition fee payment.
+    // Exact receipt text format requested by institution
+    const msg = `*${orgName}*
+*Fee Payment Receipt Confirmation*
 
-Student: ${s?.name || 'Student'}
-Receipt Number: ${r.receipt_number}
-Amount Received: ₹${(r.amount_paid || 0).toLocaleString('en-IN')}
-Pending Balance: ₹${(r.remaining_balance || 0).toLocaleString('en-IN')}
+Dear Parent / Student,
+We gratefully acknowledge receipt of fee payment for *${studentName}* (ID: ${studentId}).
 
-Thank you.
+*Receipt No:* ${receiptNo}
+*Payment No:* ${paymentNo}
+*Date:* ${date}
+*Amount Paid:* Rs. ${amountPaid}
+*Payment Method:* ${paymentMethod}
 
-Regards,
-${orgName}`;
+Thank you!
 
-    // 1. Generate the actual PDF and File object
-    let pdfData = null;
-    try {
-      pdfData = ReceiptsModule.createReceiptPDF(r);
-    } catch (e) {
-      console.warn("PDF creation warning:", e);
+For queries, contact: +91 6385577966  OR +91 9345999260
+Thank you for your prompt payment! This is an official computer-generated receipt.`;
+
+    const rawPhone = (s?.whatsapp_number || '').trim();
+
+    // 1. Direct send if student profile has registered WhatsApp number
+    if (rawPhone) {
+      const waUrl = Utils.buildWhatsAppUrl(rawPhone, msg);
+      window.open(waUrl, '_blank');
+      Utils.showToast("WhatsApp Opened", `Sending receipt confirmation directly to ${studentName} (${rawPhone})`, "success", 4000);
+      return;
     }
 
-    // 2. Mobile implementation: Check Web Share API support with files
-    const canShareFiles = pdfData && pdfData.file && typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfData.file] });
-
-    if (canShareFiles && navigator.share) {
+    // 2. If student has NO registered WhatsApp number, allow manual contact selection
+    if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          files: [pdfData.file],
-          title: `Receipt - ${s?.name || ''} (${r.receipt_number})`,
+          title: `Receipt - ${studentName} (${receiptNo})`,
           text: msg
         });
-        // Note: Sharing sheet opened; do not falsely claim delivery occurred
-        Utils.showToast("Sharing Sheet Opened", "Select WhatsApp and choose parent contact to send.", "info");
+        Utils.showToast("Sharing Sheet Opened", "No phone number registered for student. Select parent contact to send.", "info", 5000);
         return;
       } catch (err) {
-        if (err.name === 'AbortError') {
-          // User dismissed or cancelled the native sharing menu
-          return;
-        }
-        console.warn("Native file sharing failed, switching to desktop fallback:", err);
+        if (err.name === 'AbortError') return;
       }
     }
 
-    // 3. Desktop Fallback (or unsupported file-share devices):
-    ReceiptsModule.fallbackDesktopShare(r, s, msg, pdfData);
-  },
-
-  // Fallback for Desktop & Browsers where navigator.canShare({files}) is unsupported
-  fallbackDesktopShare: (r, s, msg, pdfData) => {
-    // 1. Download PDF to user's device
-    if (pdfData && pdfData.doc) {
-      try {
-        pdfData.doc.save(pdfData.filename);
-      } catch (_) {}
-    }
-
-    // 2. Open parent's WhatsApp chat with pre-filled message
-    if (s?.whatsapp_number) {
-      const waUrl = Utils.buildWhatsAppUrl(s.whatsapp_number, msg);
-      window.open(waUrl, '_blank');
-      Utils.showToast("WhatsApp Opened", "PDF receipt downloaded. Attach it to your WhatsApp conversation and send.", "info", 6500);
-    } else {
-      Utils.showToast("Receipt Downloaded", "PDF receipt downloaded. No WhatsApp phone number recorded for student.", "warning");
-    }
+    // 3. Desktop / Web fallback for unrecorded phone number
+    const waUrlManual = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(waUrlManual, '_blank');
+    Utils.showToast("WhatsApp Opened", "No WhatsApp number registered on profile. Please select parent chat manually.", "warning", 5000);
   }
 };
 

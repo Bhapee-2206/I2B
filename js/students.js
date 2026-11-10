@@ -343,7 +343,7 @@ const StudentsModule = {
       classSelect.innerHTML = `<option value="">Select Hindi Level</option>` + 
         FeesModule.HINDI_LEVELS.map(l => `
           <option value="${l.code}" ${targetLevel === l.code ? 'selected' : ''}>
-            ${l.label}
+            ${l.label || l.name + (l.local ? ' (' + l.local + ')' : '')}
           </option>
         `).join('');
 
@@ -906,7 +906,7 @@ const StudentsModule = {
           if (isHindi) {
             const code = FeesModule.normalizeHindiLevel(e.class_or_grade);
             const hl = FeesModule.HINDI_LEVELS.find(l => l.code === code);
-            levelDisplay = hl ? hl.label : e.class_or_grade;
+            levelDisplay = hl ? (hl.label || hl.name) : e.class_or_grade;
           } else {
             levelDisplay = FeesModule.normalizeSubjectClass(e.class_or_grade);
           }

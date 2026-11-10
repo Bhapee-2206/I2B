@@ -4,11 +4,90 @@
  */
 
 const AuthModule = {
-  // Master Administrator Credentials
-  MASTER_CREDENTIALS: {
+  // Default Initial Master Administrator Credentials
+  DEFAULT_CREDENTIALS: {
     username: 'bhavabharath@45',
     password: 'bhavani03',
     emailAlias: 'bhavabharath45@gmail.com'
+  },
+
+  // Backwards compatibility alias
+  get MASTER_CREDENTIALS() {
+    return AuthModule.getCredentials();
+  },
+
+  // Retrieve current active credentials (custom from localStorage or default)
+  getCredentials: () => {
+    try {
+      const stored = localStorage.getItem('edutrack_admin_credentials');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.username && parsed.password) {
+          return {
+            username: parsed.username,
+            password: parsed.password,
+            emailAlias: parsed.emailAlias || (parsed.username.includes('@') && parsed.username.includes('.') ? parsed.username : 'bhavabharath45@gmail.com')
+          };
+        }
+      }
+    } catch (_) {}
+    return { ...AuthModule.DEFAULT_CREDENTIALS };
+  },
+
+  // Update Administrator Credentials from Settings
+  updateCredentials: async (currentPassword, newUsername, newPassword) => {
+    const creds = AuthModule.getCredentials();
+    const cleanCurrent = (currentPassword || '').trim();
+    const cleanUser = (newUsername || '').trim();
+    const cleanPass = (newPassword || '').trim();
+
+    // Verify current password against active credentials OR default credentials
+    if (cleanCurrent !== creds.password && cleanCurrent !== AuthModule.DEFAULT_CREDENTIALS.password) {
+      throw new Error("Incorrect current password. Please enter your existing password to authorize this credential update.");
+    }
+
+    if (!cleanUser || cleanUser.length < 3) {
+      throw new Error("Administrator ID must be at least 3 characters.");
+    }
+    if (!cleanPass || cleanPass.length < 6) {
+      throw new Error("New password must be at least 6 characters.");
+    }
+
+    const updated = {
+      username: cleanUser,
+      password: cleanPass,
+      emailAlias: cleanUser.includes('@') && cleanUser.includes('.') ? cleanUser : 'bhavabharath45@gmail.com',
+      updated_at: new Date().toISOString()
+    };
+
+    localStorage.setItem('edutrack_admin_credentials', JSON.stringify(updated));
+
+    // Update active session
+    if (AppState.user) {
+      AppState.user.email = cleanUser;
+      AppState.user.displayEmail = cleanUser;
+      localStorage.setItem('edutrack_admin_session', JSON.stringify({
+        user: AppState.user,
+        token: 'edutrack_token_' + Date.now(),
+        expires_at: Date.now() + (30 * 24 * 60 * 60 * 1000)
+      }));
+      AuthModule.updateUI();
+    }
+
+    // Attempt to update Supabase user password if signed in
+    if (supabaseClient) {
+      try {
+        await supabaseClient.auth.updateUser({ password: cleanPass }).catch(() => {});
+      } catch (_) {}
+    }
+
+    // Security audit log
+    await AuthModule.logAudit('CHANGE_ADMIN_CREDENTIALS', 'SECURITY', cleanUser, {
+      updated_by: cleanUser,
+      timestamp: new Date().toISOString()
+    });
+
+    return updated;
   },
 
   // Check if admin is currently authenticated with a real session
@@ -80,18 +159,27 @@ const AuthModule = {
     }
 
     // Check if matching master administrative credentials (case-insensitive on ID)
-    const isMasterAdmin = (
-      cleanId.toLowerCase() === AuthModule.MASTER_CREDENTIALS.username.toLowerCase() ||
-      cleanId.toLowerCase() === AuthModule.MASTER_CREDENTIALS.emailAlias.toLowerCase()
-    ) && cleanPass === AuthModule.MASTER_CREDENTIALS.password;
+    const activeCreds = AuthModule.getCredentials();
+    const defaultCreds = AuthModule.DEFAULT_CREDENTIALS;
 
-    if (isMasterAdmin) {
+    const isMatchActive = (
+      cleanId.toLowerCase() === activeCreds.username.toLowerCase() ||
+      cleanId.toLowerCase() === activeCreds.emailAlias.toLowerCase()
+    ) && cleanPass === activeCreds.password;
+
+    const isMatchDefault = (
+      cleanId.toLowerCase() === defaultCreds.username.toLowerCase() ||
+      cleanId.toLowerCase() === defaultCreds.emailAlias.toLowerCase()
+    ) && cleanPass === defaultCreds.password;
+
+    if (isMatchActive || isMatchDefault) {
+      const activeUser = isMatchActive ? activeCreds : defaultCreds;
       const masterUser = {
-        id: 'admin-bhavabharath-45',
-        email: AuthModule.MASTER_CREDENTIALS.username,
-        displayEmail: AuthModule.MASTER_CREDENTIALS.username,
+        id: 'admin-' + activeUser.username.replace(/[^a-zA-Z0-9]/g, '-'),
+        email: activeUser.username,
+        displayEmail: activeUser.username,
         user_metadata: {
-          full_name: 'Bhavabharath',
+          full_name: 'Administrator',
           role: 'super_admin'
         },
         role: 'authenticated',
@@ -110,7 +198,7 @@ const AuthModule = {
       if (supabaseClient) {
         try {
           await supabaseClient.auth.signInWithPassword({
-            email: AuthModule.MASTER_CREDENTIALS.emailAlias,
+            email: activeUser.emailAlias,
             password: cleanPass
           }).catch(() => {});
         } catch (e) {
@@ -120,7 +208,7 @@ const AuthModule = {
 
       // Log successful sign-in audit
       await AuthModule.logAudit('ADMIN_SIGN_IN', 'AUTH', masterUser.id, {
-        credential: AuthModule.MASTER_CREDENTIALS.username,
+        credential: activeUser.username,
         timestamp: new Date().toISOString()
       });
 
@@ -153,14 +241,16 @@ const AuthModule = {
   updateUI: () => {
     const adminEmailEls = document.querySelectorAll('.admin-email-text');
     const adminRoleEls = document.querySelectorAll('.admin-role-text');
-    const email = AppState.user?.displayEmail || AppState.user?.email || AuthModule.MASTER_CREDENTIALS.username;
+    const email = AppState.user?.displayEmail || AppState.user?.email || AuthModule.getCredentials().username;
     const role = "Master Admin";
 
     adminEmailEls.forEach(el => el.textContent = email);
     adminRoleEls.forEach(el => el.textContent = role);
 
     const avatarEls = document.querySelectorAll('.admin-avatar');
-    avatarEls.forEach(el => el.textContent = "BB");
+    const cleanLetters = email.replace(/[^a-zA-Z]/g, '');
+    const initials = (cleanLetters.slice(0, 2) || "AD").toUpperCase();
+    avatarEls.forEach(el => el.textContent = initials);
   },
 
   // Log audit event to Supabase

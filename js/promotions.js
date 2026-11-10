@@ -127,7 +127,7 @@ const PromotionsModule = {
     if (isHindi) {
       const code = FeesModule.normalizeHindiLevel(targetEnrollment.class_or_grade);
       const hl = FeesModule.HINDI_LEVELS.find(l => l.code === code);
-      currentDisplay = hl ? hl.label : targetEnrollment.class_or_grade;
+      currentDisplay = hl ? (hl.label || hl.name) : targetEnrollment.class_or_grade;
     } else {
       currentDisplay = FeesModule.normalizeSubjectClass(targetEnrollment.class_or_grade);
     }
@@ -141,7 +141,7 @@ const PromotionsModule = {
     if (isHindi) {
       classSel.innerHTML = '<option value="">Select New Hindi Level</option>' + 
         FeesModule.HINDI_LEVELS.map(l => `
-          <option value="${l.code}">${l.label}</option>
+          <option value="${l.code}">${l.label || l.name}</option>
         `).join('');
 
       const targetBoard = (targetEnrollment.board || 'Virtual').toLowerCase() === 'online' ? 'Online' : 'Virtual';

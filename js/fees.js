@@ -51,16 +51,16 @@ const FeesModule = {
   ],
 
   HINDI_LEVELS: [
-    { code: 'BASIC', name: 'Basic', local: 'बेसिक', sort_order: 0 },
-    { code: 'PARICHAYA', name: 'Parichaya', local: 'परिचय', sort_order: 1 },
-    { code: 'PRATHAMIC', name: 'Prathamic', local: 'प्राथमिक', sort_order: 2 },
-    { code: 'MADHYAMA', name: 'Madhyama', local: 'मध्यमा', sort_order: 3 },
-    { code: 'RASHTRABHASHA', name: 'Rashtrabhasha', local: 'राष्ट्रभाषा', sort_order: 4 },
-    { code: 'PRAVESHIKA', name: 'Praveshika', local: 'प्रवेशिका', sort_order: 5 },
-    { code: 'VISHARAD_POORVARDH', name: 'Visharad Poorvardh', local: 'विशारद पूर्वार्ध', sort_order: 6 },
-    { code: 'VISHARAD_UTTARARDH', name: 'Visharad Uttarardh', local: 'विशारद उत्तरार्ध', sort_order: 7 },
-    { code: 'PRAVEEN_POORVARDH', name: 'Praveen Poorvardh', local: 'प्रवीण पूर्वार्ध', sort_order: 8 },
-    { code: 'PRAVEEN_UTTARARDH', name: 'Praveen Uttarardh', local: 'प्रवीण उत्तरार्ध', sort_order: 9 }
+    { code: 'BASIC', name: 'Basic', local: 'बेसिक', label: 'Basic (बेसिक)', sort_order: 0 },
+    { code: 'PARICHAYA', name: 'Parichaya', local: 'परिचय', label: 'Parichaya (परिचय)', sort_order: 1 },
+    { code: 'PRATHAMIC', name: 'Prathamic', local: 'प्राथमिक', label: 'Prathamic (प्राथमिक)', sort_order: 2 },
+    { code: 'MADHYAMA', name: 'Madhyama', local: 'मध्यमा', label: 'Madhyama (मध्यमा)', sort_order: 3 },
+    { code: 'RASHTRABHASHA', name: 'Rashtrabhasha', local: 'राष्ट्रभाषा', label: 'Rashtrabhasha (राष्ट्रभाषा)', sort_order: 4 },
+    { code: 'PRAVESHIKA', name: 'Praveshika', local: 'प्रवेशिका', label: 'Praveshika (प्रवेशिका)', sort_order: 5 },
+    { code: 'VISHARAD_POORVARDH', name: 'Visharad Poorvardh', local: 'विशारद पूर्वार्ध', label: 'Visharad Poorvardh (विशारद पूर्वार्ध)', sort_order: 6 },
+    { code: 'VISHARAD_UTTARARDH', name: 'Visharad Uttarardh', local: 'विशारद उत्तरार्ध', label: 'Visharad Uttarardh (विशारद उत्तरार्ध)', sort_order: 7 },
+    { code: 'PRAVEEN_POORVARDH', name: 'Praveen Poorvardh', local: 'प्रवीण पूर्वार्ध', label: 'Praveen Poorvardh (प्रवीण पूर्वार्ध)', sort_order: 8 },
+    { code: 'PRAVEEN_UTTARARDH', name: 'Praveen Uttarardh', local: 'प्रवीण उत्तरार्ध', label: 'Praveen Uttarardh (प्रवीण उत्तरार्ध)', sort_order: 9 }
   ],
 
   // In-memory rate matrix dictionary: key = `${category}_${variant}_${level}`
