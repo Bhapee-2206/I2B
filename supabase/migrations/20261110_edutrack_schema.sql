@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     entity_type TEXT NOT NULL,
     entity_id TEXT,
     details JSONB DEFAULT '{}'::jsonb,
-    actor_email TEXT DEFAULT 'admin@edutrack.org',
+    actor_email TEXT DEFAULT 'bhavabharath@45',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

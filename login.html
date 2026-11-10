@@ -109,14 +109,15 @@
 
         <form id="admin-login-form" onsubmit="executeLogin(event)">
           <div class="form-group">
-            <label class="form-label" for="login-email">Administrator Email</label>
+            <label class="form-label" for="login-email">Administrator ID / Email</label>
             <input 
-              type="email" 
+              type="text" 
               id="login-email" 
               class="form-control" 
-              placeholder="admin@edutrack.org" 
+              placeholder="bhavabharath@45" 
+              value="bhavabharath@45" 
               required 
-              autocomplete="email"
+              autocomplete="username"
               style="min-height: 44px;"
             >
           </div>
@@ -127,7 +128,8 @@
               type="password" 
               id="login-password" 
               class="form-control" 
-              placeholder="••••••••••••" 
+              placeholder="bhavani03" 
+              value="bhavani03" 
               required 
               autocomplete="current-password"
               style="min-height: 44px;"
@@ -158,12 +160,7 @@
 
     // Check if session already active
     document.addEventListener('DOMContentLoaded', async () => {
-      if (supabaseClient) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session && session.user) {
-          window.location.href = "index.html#dashboard";
-        }
-      }
+      await AuthModule.init();
     });
 
     async function executeLogin(e) {

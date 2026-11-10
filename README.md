@@ -67,6 +67,16 @@ When clicking **Send via WhatsApp**:
 
 ---
 
+## 🔐 Administrator Access & Credentials
+
+EduTrack is a private administrative system. To access the portal:
+
+- **Portal URL**: `https://<your-username>.github.io/<repo-name>/login.html` (or `login.html` locally)
+- **Administrator ID / Email**: `bhavabharath@45`
+- **Password**: `bhavani03`
+
+---
+
 ## 🌐 GitHub Pages Deployment Instructions
 
 1. Push this repository to GitHub:
