@@ -205,6 +205,9 @@ const StudentsModule = {
               <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
                 <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid); padding: 0.25rem 0.45rem;">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+              </button>
             </td>
           </tr>
         `;
@@ -254,6 +257,9 @@ const StudentsModule = {
               <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
                 <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid); padding: 0.35rem 0.6rem;">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+              </button>
             </div>
           </div>
         `;
@@ -301,6 +307,8 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Register New Student';
+    const modalDelBtn = document.getElementById('btn-modal-delete-student');
+    if (modalDelBtn) modalDelBtn.style.display = 'none';
     Utils.openModal('modal-add-student');
   },
 
@@ -907,7 +915,9 @@ const StudentsModule = {
             </div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <strong style="color: var(--accent-blue); font-size: 1rem;">${Utils.formatCurrency(e.agreed_fee)}/mo</strong>
-              <span class="badge ${e.status === 'active' ? 'badge-paid' : 'badge-unpaid'}">${e.status}</span>
+              <span class="badge ${e.status === 'active' ? 'badge-paid' : 'badge-unpaid'}">
+                ${e.status === 'active' ? 'Active' : 'Discontinued'}
+              </span>
               ${e.status === 'active' ? `
                 <button class="btn btn-secondary btn-sm" onclick="StudentsModule.discontinueEnrollment('${e.id}')" style="color: var(--status-unpaid);">
                   Discontinue
@@ -1000,29 +1010,104 @@ const StudentsModule = {
     });
 
     document.getElementById('student-modal-title').textContent = 'Edit Student Profile & Enrolments';
+    const modalDelBtn = document.getElementById('btn-modal-delete-student');
+    if (modalDelBtn) modalDelBtn.style.display = 'inline-flex';
     Utils.openModal('modal-add-student');
+  },
+
+  // Delete student initiated from the Edit Student modal
+  deleteFromModal: () => {
+    const studentId = document.getElementById('student-form-id').value;
+    if (studentId) {
+      StudentsModule.deleteStudent(studentId);
+    }
+  },
+
+  // Permanently delete a student and cascade all records
+  deleteStudent: async (studentId) => {
+    if (!studentId) return;
+    const student = (AppState.students || []).find(s => s.id === studentId);
+    const studentName = student ? student.name : 'this student';
+    const studentCode = student?.student_id ? ` (${student.student_id})` : '';
+
+    const confirmMsg = `Are you sure you want to permanently delete ${studentName}${studentCode}?\n\nThis will remove the student profile, all enrolments, invoices, and payment records.\nThis action cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      // 1. Delete student from Supabase (foreign keys ON DELETE CASCADE handle enrolments, invoices, payments, etc.)
+      const { error } = await supabaseClient
+        .from('students')
+        .delete()
+        .eq('id', studentId);
+
+      if (error) throw error;
+
+      // 2. Audit log
+      try {
+        await AuthModule.logAudit('delete_student', 'students', studentId, { name: studentName });
+      } catch (_) {}
+
+      Utils.showToast("Student Deleted", `${studentName} was permanently deleted.`, "success");
+
+      // 3. Close modal if open
+      Utils.closeModal('modal-add-student');
+
+      // 4. Refresh all stores
+      await StudentsModule.loadStudents();
+      await MonthlyFeesModule.loadInvoices();
+      await PaymentsModule.loadPayments();
+      StudentsModule.renderStudentsTable();
+
+      // 5. If currently viewing this student's profile, navigate back to directory
+      if (StudentsModule.currentProfileStudentId === studentId || window.location.hash.includes('student-profile')) {
+        StudentsModule.currentProfileStudentId = null;
+        window.location.hash = '#students';
+      }
+    } catch (err) {
+      console.error("Delete student error:", err);
+      Utils.showToast("Error", err.message || "Failed to delete student record", "error");
+    }
   },
 
   // Discontinue an individual enrolment
   discontinueEnrollment: async (enrollmentId) => {
     if (confirm("Are you sure you want to discontinue this programme enrolment? Future invoices will not include this fee.")) {
       try {
-        const { error } = await supabaseClient
+        // Try 'cancelled' first (supported by PostgreSQL check constraint)
+        let { error } = await supabaseClient
           .from('enrollments')
           .update({
-            status: 'discontinued',
+            status: 'cancelled',
             end_date: new Date().toISOString().slice(0, 10),
             updated_at: new Date().toISOString()
           })
           .eq('id', enrollmentId);
 
-        if (error) throw error;
-        await AuthModule.logAudit('discontinue_enrollment', 'enrollments', enrollmentId, {});
-        Utils.showToast("Discontinued", "Programme enrolment discontinued", "info");
+        if (error) {
+          // Fallback to 'discontinued'
+          const fb = await supabaseClient
+            .from('enrollments')
+            .update({
+              status: 'discontinued',
+              end_date: new Date().toISOString().slice(0, 10),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', enrollmentId);
+          if (fb.error) throw fb.error;
+        }
+
+        try {
+          await AuthModule.logAudit('discontinue_enrollment', 'enrollments', enrollmentId, {});
+        } catch (_) {}
+
+        Utils.showToast("Discontinued", "Programme enrolment discontinued successfully", "success");
         await StudentsModule.loadStudents();
-        StudentsModule.viewProfile(StudentsModule.currentProfileStudentId);
+        if (StudentsModule.currentProfileStudentId) {
+          await StudentsModule.viewProfile(StudentsModule.currentProfileStudentId);
+        }
       } catch (err) {
-        Utils.showToast("Error", "Failed to discontinue programme", "error");
+        console.error("Discontinue error:", err);
+        Utils.showToast("Error", err.message || "Failed to discontinue programme", "error");
       }
     }
   }

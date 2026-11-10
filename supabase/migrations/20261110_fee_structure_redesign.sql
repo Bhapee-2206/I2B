@@ -261,3 +261,4 @@ CREATE POLICY "Public fee_levels write access" ON public.fee_levels FOR ALL USIN
 
 -- 7. REFRESH SCHEMA CACHE
 NOTIFY pgrst, 'reload schema';
+

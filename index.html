@@ -445,6 +445,9 @@
                 <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal(StudentsModule.currentProfileStudentId)">
                   <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
                 </button>
+                <button class="btn btn-secondary btn-sm" onclick="StudentsModule.deleteStudent(StudentsModule.currentProfileStudentId)" style="color: var(--status-unpaid);" title="Delete Student">
+                  <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete Student
+                </button>
               </div>
             </div>
 
@@ -1337,11 +1340,18 @@
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-add-student')">Cancel</button>
-          <button type="submit" class="btn btn-primary">
-            <i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Student (Status: Unpaid)
-          </button>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <button type="button" class="btn btn-secondary" id="btn-modal-delete-student" onclick="StudentsModule.deleteFromModal()" style="color: var(--status-unpaid); display: none;">
+              <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete Student
+            </button>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-add-student')">Cancel</button>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Student (Status: Unpaid)
+            </button>
+          </div>
         </div>
       </form>
     </div>
