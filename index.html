@@ -156,7 +156,7 @@
                 </span>
                 <span class="meta-pill">
                   <i data-lucide="clock" style="width: 13px; height: 13px;"></i>
-                  Current Cycle: <strong>November 2026</strong>
+                  Current Cycle: <strong class="dynamic-current-cycle-text">November 2026</strong>
                 </span>
               </div>
             </div>
@@ -1136,6 +1136,9 @@
                 <div class="card-title">Academic Years Management</div>
                 <div class="card-subtitle">Active and historical academic cycles</div>
               </div>
+              <button class="btn btn-secondary btn-sm" onclick="SettingsModule.openAddAcademicYearModal()">
+                <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Academic Year
+              </button>
             </div>
 
             <div class="table-responsive" style="margin-bottom: 2rem;">
@@ -1181,6 +1184,30 @@
                   <!-- Dynamically populated -->
                 </tbody>
               </table>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: 2rem 0;">
+
+            <!-- System Longevity & Permanent Data Backup -->
+            <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 0.75rem;">
+              <div>
+                <div class="card-title">Permanent Data Backup & Disaster Recovery</div>
+                <div class="card-subtitle">One-click snapshot archives to preserve all institutional records indefinitely</div>
+              </div>
+            </div>
+
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1rem;">
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5;">
+                Download complete, self-contained data backups of students, fee structures, invoices, payment history, and receipts. Keep backups securely on offline drives to protect institutional records across decades.
+              </p>
+              <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-navy" onclick="SettingsModule.downloadFullSystemBackup()">
+                  <i data-lucide="download" style="width: 15px; height: 15px;"></i> Download Full Database Backup (JSON)
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="ReportsModule.exportToExcel()">
+                  <i data-lucide="file-spreadsheet" style="width: 15px; height: 15px;"></i> Export Complete Ledger (Excel)
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -1790,6 +1817,51 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-edit-fee-rate')">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD ACADEMIC YEAR MODAL -->
+  <div class="modal-overlay" id="modal-add-academic-year">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">Add Academic Year</div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-add-academic-year')">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+
+      <form onsubmit="SettingsModule.saveAcademicYear(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Academic Year Name <span class="required">*</span></label>
+            <input type="text" id="new-academic-year-name" class="form-control" placeholder="e.g. 2027-2028" required>
+            <div class="form-hint" style="font-size: 0.75rem; color: var(--text-muted);">Format: YYYY-YYYY</div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Start Date <span class="required">*</span></label>
+              <input type="date" id="new-academic-year-start" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date <span class="required">*</span></label>
+              <input type="date" id="new-academic-year-end" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="new-academic-year-active">
+              <span style="font-size: 0.88rem; font-weight: 600;">Set as Current Active Academic Year</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-add-academic-year')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Academic Year</button>
         </div>
       </form>
     </div>

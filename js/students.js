@@ -118,14 +118,25 @@ const StudentsModule = {
 
     let list = AppState.students || [];
 
-    // Search
+    // Search (student name, ID, parent name, phone, class, board, or programme)
     if (searchTerm) {
-      list = list.filter(s => 
-        (s.name && s.name.toLowerCase().includes(searchTerm)) ||
-        (s.student_id && s.student_id.toLowerCase().includes(searchTerm)) ||
-        (s.parent_name && s.parent_name.toLowerCase().includes(searchTerm)) ||
-        (s.whatsapp_number && s.whatsapp_number.includes(searchTerm))
-      );
+      list = list.filter(s => {
+        const matchesPersonal = 
+          (s.name && s.name.toLowerCase().includes(searchTerm)) ||
+          (s.student_id && s.student_id.toLowerCase().includes(searchTerm)) ||
+          (s.parent_name && s.parent_name.toLowerCase().includes(searchTerm)) ||
+          (s.whatsapp_number && s.whatsapp_number.includes(searchTerm));
+
+        if (matchesPersonal) return true;
+
+        const matchesEnrolment = (s.enrollments || []).some(e => 
+          (e.class_or_grade && e.class_or_grade.toLowerCase().includes(searchTerm)) ||
+          (e.board && e.board.toLowerCase().includes(searchTerm)) ||
+          (e.programmes?.name && e.programmes.name.toLowerCase().includes(searchTerm))
+        );
+
+        return matchesEnrolment;
+      });
     }
 
     // Filters
@@ -970,7 +981,7 @@ const StudentsModule = {
             <td>${Utils.formatMonthYear(inv.billing_month, inv.billing_year)}</td>
             <td>${Utils.formatCurrency(inv.total_amount)}</td>
             <td>${Utils.formatCurrency(inv.paid_amount)}</td>
-            <td><strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(inv.balance_amount)}</strong></td>
+            <td><strong style="color: ${(inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0) ? 'var(--status-paid)' : 'var(--status-unpaid)'};">${Utils.formatCurrency(inv.status === 'paid' ? 0 : Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))}</strong></td>
             <td>
               <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
                 ${inv.status}

@@ -75,6 +75,28 @@ const App = {
         App.closeMoreSheet();
       });
     });
+
+    // Network resilience (online / offline notifications & auto-reconnect)
+    window.addEventListener('online', () => {
+      Utils.showToast("Connected", "Internet connection restored. Synchronizing...", "success", 4000);
+      App.reloadAllStores();
+    });
+    window.addEventListener('offline', () => {
+      Utils.showToast("Offline Mode", "Network disconnected. Working in offline view.", "warning", 6000);
+    });
+  },
+
+  // Reload all stores when reconnecting or after batch updates
+  reloadAllStores: async () => {
+    try {
+      await Promise.all([
+        StudentsModule.loadStudents(),
+        MonthlyFeesModule.loadInvoices(),
+        PaymentsModule.loadPayments(),
+        ReceiptsModule.loadReceipts()
+      ]);
+      App.navigateTo(App.currentRoute);
+    } catch (_) {}
   },
 
   // Toggle Mobile More Sheet

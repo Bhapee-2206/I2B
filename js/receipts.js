@@ -387,6 +387,7 @@ We gratefully acknowledge receipt of fee payment for *${studentName}* (ID: ${stu
 Thank you!
 
 For queries, contact: +91 6385577966  OR +91 9345999260
+Email: i2btutioncentre@gmail.com
 Thank you for your prompt payment! This is an official computer-generated receipt.`;
 
     const rawPhone = (s?.whatsapp_number || '').trim();

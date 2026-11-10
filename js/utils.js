@@ -107,6 +107,9 @@ const Utils = {
   cleanPhoneNumber: (phone) => {
     if (!phone) return '';
     let cleaned = phone.replace(/[^0-9]/g, '');
+    if (cleaned.length === 11 && cleaned.startsWith('0')) {
+      cleaned = cleaned.slice(1);
+    }
     if (cleaned.length === 10) {
       cleaned = '91' + cleaned;
     }
@@ -154,8 +157,9 @@ const Utils = {
     const prefix = AppState.institution?.receipt_prefix || 'REC';
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const rand = Math.floor(100 + Math.random() * 900);
-    return `${prefix}-${ym}-${rand}`;
+    const countThisMonth = (AppState.receipts || []).filter(r => (r.receipt_number || '').includes(ym)).length;
+    const seq = String(countThisMonth + 1).padStart(4, '0');
+    return `${prefix}-${ym}-${seq}`;
   },
 
   // Generate Next Invoice Number (e.g. INV-202611-001)

@@ -28,6 +28,12 @@ const DashboardModule = {
     const curMonth = now.getMonth() + 1;
     const curYear = now.getFullYear();
 
+    // Update all dynamic cycle labels across app
+    const cycleEls = document.querySelectorAll('.dynamic-current-cycle-text');
+    cycleEls.forEach(el => {
+      el.textContent = Utils.formatMonthYear(curMonth, curYear);
+    });
+
     // Invoices for current billing month
     const currentInvoices = (AppState.invoices || []).filter(inv => 
       inv.billing_month === curMonth && inv.billing_year === curYear && inv.status !== 'cancelled'

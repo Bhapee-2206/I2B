@@ -9,6 +9,58 @@ const MonthlyFeesModule = {
 
   init: async () => {
     await MonthlyFeesModule.loadInvoices();
+    MonthlyFeesModule.populateYearFilters();
+  },
+
+  // Dynamically populate year & month filters for decade-long calendar support
+  populateYearFilters: () => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    // Collect all unique years from invoices, academic years, and current year +- 5
+    const yearSet = new Set([curYear - 2, curYear - 1, curYear, curYear + 1, curYear + 2, curYear + 3, curYear + 4, curYear + 5]);
+    (AppState.invoices || []).forEach(inv => {
+      if (inv.billing_year) yearSet.add(inv.billing_year);
+    });
+    (AppState.academicYears || []).forEach(ay => {
+      if (ay.start_date) yearSet.add(new Date(ay.start_date).getFullYear());
+      if (ay.end_date) yearSet.add(new Date(ay.end_date).getFullYear());
+    });
+
+    const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
+
+    // 1. Monthly fee filter year
+    const filterYear = document.getElementById('monthly-fee-filter-year');
+    if (filterYear) {
+      const selected = filterYear.value ? parseInt(filterYear.value, 10) : curYear;
+      filterYear.innerHTML = sortedYears.map(y => `<option value="${y}" ${y === selected ? 'selected' : ''}>${y}</option>`).join('');
+    }
+
+    // 2. Monthly fee filter month
+    const filterMonth = document.getElementById('monthly-fee-filter-month');
+    if (filterMonth && !filterMonth.dataset.initialized) {
+      filterMonth.value = String(curMonth);
+      filterMonth.dataset.initialized = "true";
+    }
+
+    // 3. Batch generate modal year
+    const genYear = document.getElementById('gen-year-select');
+    if (genYear) {
+      genYear.innerHTML = sortedYears.map(y => `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`).join('');
+    }
+
+    // 4. Batch generate modal month
+    const genMonth = document.getElementById('gen-month-select');
+    if (genMonth) {
+      genMonth.value = String(curMonth);
+    }
+
+    // 5. Update header current cycle text
+    const cycleEls = document.querySelectorAll('.dynamic-current-cycle-text');
+    cycleEls.forEach(el => {
+      el.textContent = Utils.formatMonthYear(curMonth, curYear);
+    });
   },
 
   // Load invoices from Supabase
@@ -162,9 +214,12 @@ const MonthlyFeesModule = {
 
   // Open the Generate Monthly Fees modal
   openGenerateModal: () => {
+    MonthlyFeesModule.populateYearFilters();
     const now = new Date();
-    document.getElementById('gen-month-select').value = now.getMonth() + 1;
-    document.getElementById('gen-year-select').value = now.getFullYear();
+    const curMonthEl = document.getElementById('gen-month-select');
+    const curYearEl = document.getElementById('gen-year-select');
+    if (curMonthEl) curMonthEl.value = now.getMonth() + 1;
+    if (curYearEl) curYearEl.value = now.getFullYear();
 
     MonthlyFeesModule.updateGeneratePreview();
     Utils.openModal('modal-generate-invoices');

@@ -215,6 +215,101 @@ const SettingsModule = {
   },
 
   // Populate Administrator Credentials Form
+  // Open Add Academic Year Modal
+  openAddAcademicYearModal: () => {
+    const now = new Date();
+    const nextYear = now.getFullYear() + 1;
+    const nameInp = document.getElementById('new-academic-year-name');
+    if (nameInp) nameInp.value = `${now.getFullYear()}-${nextYear}`;
+    const startInp = document.getElementById('new-academic-year-start');
+    if (startInp) startInp.value = `${now.getFullYear()}-06-01`;
+    const endInp = document.getElementById('new-academic-year-end');
+    if (endInp) endInp.value = `${nextYear}-05-31`;
+    const activeCheck = document.getElementById('new-academic-year-active');
+    if (activeCheck) activeCheck.checked = false;
+
+    Utils.openModal('modal-add-academic-year');
+  },
+
+  // Save New Academic Year
+  saveAcademicYear: async (e) => {
+    e.preventDefault();
+    const year_name = document.getElementById('new-academic-year-name').value.trim();
+    const start_date = document.getElementById('new-academic-year-start').value;
+    const end_date = document.getElementById('new-academic-year-end').value;
+    const is_active = document.getElementById('new-academic-year-active').checked;
+
+    if (!year_name || !start_date || !end_date) {
+      Utils.showToast("Required", "Please complete all academic year fields", "warning");
+      return;
+    }
+
+    try {
+      if (is_active && supabaseClient) {
+        await supabaseClient.from('academic_years').update({ is_active: false }).neq('year_name', year_name);
+      }
+
+      if (supabaseClient) {
+        const { error } = await supabaseClient
+          .from('academic_years')
+          .insert([{
+            year_name,
+            start_date,
+            end_date,
+            is_active,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+
+        if (error) throw error;
+      }
+
+      Utils.closeModal('modal-add-academic-year');
+      Utils.showToast("Academic Year Added", `Academic year ${year_name} created successfully`, "success");
+
+      await SettingsModule.loadAcademicYears();
+      SettingsModule.renderAcademicYearsTable();
+      if (typeof PromotionsModule !== 'undefined' && PromotionsModule.populateAcademicYears) {
+        PromotionsModule.populateAcademicYears();
+      }
+    } catch (err) {
+      console.error("Save academic year error:", err);
+      Utils.showToast("Error", err.message || "Failed to create academic year", "error");
+    }
+  },
+
+  // Download Full Institutional Backup JSON
+  downloadFullSystemBackup: async () => {
+    try {
+      Utils.showToast("Preparing Backup", "Generating complete institutional snapshot archive...", "info");
+      const snapshot = {
+        version: "1.0",
+        institution_name: AppState.institution?.institution_name || "I2B Educational Institution",
+        generated_at: new Date().toISOString(),
+        institution: AppState.institution,
+        academic_years: AppState.academicYears,
+        programmes: AppState.programmes,
+        fee_structures: AppState.feeStructures,
+        students: AppState.students,
+        invoices: AppState.invoices,
+        payments: AppState.payments,
+        receipts: AppState.receipts
+      };
+
+      const jsonStr = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = URL.createObjectURL(blob);
+      link.download = `EduTrack_Full_Backup_${dateStr}.json`;
+      link.click();
+      Utils.showToast("Backup Saved", `Database backup downloaded successfully (${(blob.size / 1024).toFixed(1)} KB)`, "success", 5000);
+    } catch (err) {
+      console.error("Backup error:", err);
+      Utils.showToast("Error", "Failed to generate system backup", "error");
+    }
+  },
+
   populateCredentialsForm: () => {
     const creds = AuthModule.getCredentials();
     const userInp = document.getElementById('setting-cred-username');
