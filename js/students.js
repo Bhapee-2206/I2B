@@ -263,7 +263,7 @@ const StudentsModule = {
               <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
                 <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
               </button>
-              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid); padding: 0.35rem 0.6rem;">
+              <button class="btn btn-secondary btn-sm btn-delete-student" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid);">
                 <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
               </button>
             </div>
@@ -313,9 +313,12 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Register New Student';
+    const saveBtn = document.getElementById('btn-save-student-submit');
+    if (saveBtn) saveBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Student';
     const modalDelBtn = document.getElementById('btn-modal-delete-student');
     if (modalDelBtn) modalDelBtn.style.display = 'none';
     Utils.openModal('modal-add-student');
+    Utils.renderIcons();
   },
 
   // Dynamic sync of Level / Class and Board / Delivery Type dropdowns
@@ -1051,6 +1054,8 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Edit Student Profile & Enrolments';
+    const saveBtn = document.getElementById('btn-save-student-submit');
+    if (saveBtn) saveBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Update Student';
     const modalDelBtn = document.getElementById('btn-modal-delete-student');
     if (modalDelBtn) modalDelBtn.style.display = 'inline-flex';
     Utils.openModal('modal-add-student');
