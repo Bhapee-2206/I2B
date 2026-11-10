@@ -542,10 +542,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql VOLATILE;
 
--- ATOMIC DAILY ATTENDANCE REGISTER RPC (Supports both argument orders)
+-- ATOMIC DAILY ATTENDANCE REGISTER RPC
+DROP FUNCTION IF EXISTS public.save_attendance_register(DATE, UUID, JSONB, TEXT);
+DROP FUNCTION IF EXISTS public.save_attendance_register(UUID, DATE, JSONB, TEXT);
+
 CREATE OR REPLACE FUNCTION public.save_attendance_register(
-    p_attendance_date DATE,
     p_programme_id UUID,
+    p_attendance_date DATE,
     p_records JSONB,
     p_notes TEXT DEFAULT NULL
 )
@@ -558,16 +561,9 @@ DECLARE
     v_absent INTEGER := 0;
     v_leave INTEGER := 0;
     v_rule RECORD;
-    v_is_future BOOLEAN;
 BEGIN
-    SELECT (p_attendance_date > CURRENT_DATE) INTO v_is_future;
-    IF v_is_future THEN
+    IF p_attendance_date > CURRENT_DATE THEN
         RAISE EXCEPTION 'Attendance cannot be recorded for future dates.';
-    END IF;
-
-    SELECT * INTO v_rule FROM public.programme_attendance_rules WHERE programme_id = p_programme_id;
-    IF FOUND AND NOT v_rule.attendance_enabled THEN
-        RAISE EXCEPTION 'Attendance tracking is disabled for this programme.';
     END IF;
 
     FOR v_rec IN SELECT * FROM jsonb_to_recordset(p_records) AS x(enrollment_id UUID, status TEXT, notes TEXT)
@@ -622,20 +618,7 @@ BEGIN
         'leave', v_leave
     );
 END;
-$$ LANGUAGE plpgsql VOLATILE;
-
--- Overloaded variation supporting (p_programme_id, p_attendance_date, p_records)
-CREATE OR REPLACE FUNCTION public.save_attendance_register(
-    p_programme_id UUID,
-    p_attendance_date DATE,
-    p_records JSONB,
-    p_notes TEXT DEFAULT NULL
-)
-RETURNS JSONB AS $$
-BEGIN
-    RETURN public.save_attendance_register(p_attendance_date, p_programme_id, p_records, p_notes);
-END;
-$$ LANGUAGE plpgsql VOLATILE;
+$$ LANGUAGE plpgsql VOLATILE SECURITY DEFINER;
 
 -- CANCEL ATTENDANCE SESSION RPC
 CREATE OR REPLACE FUNCTION public.cancel_attendance_session(
@@ -735,6 +718,10 @@ INSERT INTO public.fee_structures (programme_id, class_or_grade, board, monthly_
 SELECT p.id, '10th Standard', 'Matric', 1000.00, 0.00 FROM public.programmes p WHERE p.code = 'SUBJECT'
 ON CONFLICT DO NOTHING;
 
+-- Reload PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 -- ============================================================================
 -- END OF SINGLE MASTER DATABASE SCRIPT
 -- ============================================================================
+
