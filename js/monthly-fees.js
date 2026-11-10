@@ -295,7 +295,7 @@ const MonthlyFeesModule = {
     const month = parseInt(document.getElementById('gen-month-select').value, 10);
     const year = parseInt(document.getElementById('gen-year-select').value, 10);
 
-    const activeStudents = (AppState.students || []).filter(s => s.status === 'active');
+    const activeStudents = (AppState.students || []).filter(s => (s.status || 'active').toLowerCase() === 'active');
     
     // Check existing invoices for this month/year (duplicate prevention)
     const existingStudentIds = new Set(
@@ -316,45 +316,73 @@ const MonthlyFeesModule = {
     if (totAmount) totAmount.textContent = Utils.formatCurrency(estimatedTotal);
   },
 
-  // Execute Batch Invoice Generation
+  // Execute Batch Invoice Generation (Fast, Atomic & Resilient)
   generateInvoices: async () => {
     const month = parseInt(document.getElementById('gen-month-select').value, 10);
     const year = parseInt(document.getElementById('gen-year-select').value, 10);
 
-    const activeStudents = (AppState.students || []).filter(s => s.status === 'active');
-    const existingStudentIds = new Set(
-      (AppState.invoices || [])
-        .filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled')
-        .map(inv => inv.student_id)
-    );
+    const genBtn = document.querySelector('#modal-generate-invoices button.btn-primary');
+    const originalBtnHtml = genBtn ? genBtn.innerHTML : '';
 
-    const eligibleStudents = activeStudents.filter(s => !existingStudentIds.has(s.id));
-
-    if (eligibleStudents.length === 0) {
-      Utils.showToast("All Invoices Present", "All eligible active students already have invoices for this billing period.", "info");
-      Utils.closeModal('modal-generate-invoices');
-      return;
+    if (genBtn) {
+      genBtn.disabled = true;
+      genBtn.innerHTML = '<span class="spinner-sm" style="display:inline-block; width:14px; height:14px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px;"></span> Generating Invoices...';
     }
 
     try {
+      const activeStudents = (AppState.students || []).filter(s => (s.status || 'active').toLowerCase() === 'active');
+
+      // 1. Fetch definitive existing invoices from Supabase to guarantee no constraint violations
+      const existingStudentIds = new Set(
+        (AppState.invoices || [])
+          .filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled')
+          .map(inv => inv.student_id)
+      );
+
+      if (supabaseClient) {
+        try {
+          const { data: dbInvs } = await supabaseClient
+            .from('invoices')
+            .select('student_id')
+            .eq('billing_month', month)
+            .eq('billing_year', year)
+            .neq('status', 'cancelled');
+          if (dbInvs && dbInvs.length > 0) {
+            dbInvs.forEach(i => existingStudentIds.add(i.student_id));
+          }
+        } catch (_) {}
+      }
+
+      const eligibleStudents = activeStudents.filter(s => !existingStudentIds.has(s.id));
+
+      if (eligibleStudents.length === 0) {
+        Utils.showToast("All Invoices Present", `All active students already have invoices for ${Utils.formatMonthYear(month, year)}.`, "info");
+        Utils.closeModal('modal-generate-invoices');
+        return;
+      }
+
       const now = new Date();
       const defaultDueDay = AppState.institution?.default_due_day || 10;
       const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(Math.min(defaultDueDay, 28)).padStart(2, '0')}`;
 
-      let createdCount = 0;
+      // 2. Prepare all invoice payloads
+      const invoicePayloads = [];
+      const invoiceStudents = [];
 
-      for (let i = 0; i < eligibleStudents.length; i++) {
-        const student = eligibleStudents[i];
-        const activeEnrollments = (student.enrollments || []).filter(e => e.status === 'active');
-        if (activeEnrollments.length === 0) continue;
+      eligibleStudents.forEach((student, idx) => {
+        const activeEnrollments = (student.enrollments || []).filter(e => (!e.status || e.status.toLowerCase() === 'active'));
+        if (activeEnrollments.length === 0) return;
 
-        const totalFee = activeEnrollments.reduce((sum, e) => sum + (parseFloat(e.agreed_fee) || 0), 0);
-        if (totalFee <= 0) continue;
+        let totalFee = activeEnrollments.reduce((sum, e) => {
+          const fee = parseFloat(e.agreed_fee) || (typeof FeesModule !== 'undefined' ? FeesModule.getStandardFee(e.programme_id, e.class_or_grade, e.board) : 0) || 0;
+          return sum + fee;
+        }, 0);
 
-        // Generate unique sequential invoice number
-        const invNumber = Utils.getNextInvoiceNumber(student.student_id, month, year, i + 1);
+        if (totalFee <= 0) totalFee = 500; // Baseline fallback
 
-        const invPayload = {
+        const invNumber = Utils.getNextInvoiceNumber(student.student_id, month, year, idx + 1);
+
+        invoicePayloads.push({
           invoice_number: invNumber,
           student_id: student.id,
           billing_month: month,
@@ -366,51 +394,87 @@ const MonthlyFeesModule = {
           balance_amount: totalFee,
           status: 'unpaid',
           notes: `Batch monthly invoice for ${Utils.formatMonthYear(month, year)}`
-        };
+        });
+        invoiceStudents.push(student);
+      });
 
-        let createdInv = null;
+      if (invoicePayloads.length === 0) {
+        Utils.showToast("Notice", "No eligible students found with active programme enrolments.", "info");
+        Utils.closeModal('modal-generate-invoices');
+        return;
+      }
+
+      // 3. Batch Insert Invoices (Ultra fast single network roundtrip with individual fallback)
+      let createdInvoices = [];
+
+      if (supabaseClient) {
         try {
-          const { data: inv, error: invErr } = await supabaseClient
+          const { data: inserted, error: batchErr } = await supabaseClient
             .from('invoices')
-            .insert([invPayload])
+            .insert(invoicePayloads)
             .select();
 
-          if (!invErr && inv && inv[0]) {
-            createdInv = inv[0];
-          } else if (invErr) {
-            // Collision retry with timestamp suffix
-            const retryPayload = { ...invPayload, invoice_number: `${invNumber}-${Math.floor(100 + Math.random() * 900)}` };
-            const { data: retryInv } = await supabaseClient.from('invoices').insert([retryPayload]).select();
-            if (retryInv && retryInv[0]) createdInv = retryInv[0];
+          if (!batchErr && inserted && inserted.length > 0) {
+            createdInvoices = inserted;
+          } else {
+            throw batchErr || new Error("Batch insert returned empty");
           }
-        } catch (e) {
-          console.warn("Invoice insert notice:", e);
+        } catch (batchEx) {
+          console.warn("Batch invoice insert fallback to individual inserts:", batchEx);
+          for (let i = 0; i < invoicePayloads.length; i++) {
+            try {
+              const { data: singleInv } = await supabaseClient
+                .from('invoices')
+                .insert([invoicePayloads[i]])
+                .select();
+              if (singleInv && singleInv[0]) createdInvoices.push(singleInv[0]);
+            } catch (_) {}
+          }
         }
+      }
 
-        if (createdInv) {
-          createdCount++;
-          const items = activeEnrollments.map(e => ({
-            invoice_id: createdInv.id,
-            enrollment_id: e.id,
-            programme_id: e.programme_id,
-            class_or_grade: e.class_or_grade,
-            description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
-            amount: e.agreed_fee
-          }));
+      // 4. Batch Insert Invoice Line Items
+      if (createdInvoices.length > 0 && supabaseClient) {
+        const allItems = [];
+        createdInvoices.forEach(inv => {
+          const student = invoiceStudents.find(s => s.id === inv.student_id);
+          if (!student) return;
+          const activeEnrollments = (student.enrollments || []).filter(e => (!e.status || e.status.toLowerCase() === 'active'));
+          activeEnrollments.forEach(e => {
+            const fee = parseFloat(e.agreed_fee) || (typeof FeesModule !== 'undefined' ? FeesModule.getStandardFee(e.programme_id, e.class_or_grade, e.board) : 0) || 0;
+            allItems.push({
+              invoice_id: inv.id,
+              enrollment_id: e.id,
+              programme_id: e.programme_id,
+              class_or_grade: e.class_or_grade,
+              description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
+              amount: fee
+            });
+          });
+        });
 
+        if (allItems.length > 0) {
           try {
-            await supabaseClient.from('invoice_items').insert(items);
+            await supabaseClient.from('invoice_items').insert(allItems);
           } catch (_) {}
         }
       }
 
+      const createdCount = createdInvoices.length;
       await AuthModule.logAudit('generate_monthly_invoices', 'invoices', `${month}-${year}`, { count: createdCount });
       Utils.closeModal('modal-generate-invoices');
       Utils.showToast("Invoices Generated", `Successfully generated ${createdCount} monthly invoices with UNPAID status.`, "success");
 
+      // Auto-set filter to target billing month/year so user sees new invoices immediately
+      const filterMonthEl = document.getElementById('monthly-fee-filter-month');
+      const filterYearEl = document.getElementById('monthly-fee-filter-year');
+      if (filterMonthEl) filterMonthEl.value = month;
+      if (filterYearEl) filterYearEl.value = year;
+
       await MonthlyFeesModule.loadInvoices();
       await StudentsModule.loadStudents();
       MonthlyFeesModule.renderMonthlyFeesTable();
+
       if (typeof DashboardModule !== 'undefined' && DashboardModule.updateMetrics) {
         DashboardModule.updateMetrics();
         DashboardModule.renderOutstandingStudentsList();
@@ -418,7 +482,13 @@ const MonthlyFeesModule = {
 
     } catch (err) {
       console.error("Generate invoices error:", err);
-      Utils.showToast("Error", "Failed to generate monthly fee invoices", "error");
+      Utils.showToast("Error", err.message || "Failed to generate monthly fee invoices", "error");
+    } finally {
+      if (genBtn) {
+        genBtn.disabled = false;
+        genBtn.innerHTML = originalBtnHtml;
+        Utils.renderIcons();
+      }
     }
   },
 

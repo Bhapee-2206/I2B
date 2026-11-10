@@ -223,9 +223,15 @@ const StudentsModule = {
               <button class="btn btn-secondary btn-sm" onclick="StudentsModule.editCurrentStudent('${s.id}')" title="Edit Student">
                 <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit
               </button>
-              <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
-                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
-              </button>
+              ${pendingBal > 0 ? `
+                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
+                </button>
+              ` : `
+                <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.75; cursor: default;" title="Fee already collected for this month">
+                  <i data-lucide="check-circle-2" style="width: 14px; height: 14px; color: var(--status-paid);"></i> Paid
+                </button>
+              `}
               <button class="btn btn-secondary btn-sm" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid); padding: 0.25rem 0.45rem;">
                 <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
               </button>
@@ -278,9 +284,15 @@ const StudentsModule = {
               <button class="btn btn-secondary btn-sm" onclick="StudentsModule.editCurrentStudent('${s.id}')">
                 <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit
               </button>
-              <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
-                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
-              </button>
+              ${pendingBal > 0 ? `
+                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
+                </button>
+              ` : `
+                <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.75; cursor: default;" title="Fee already collected for this month">
+                  <i data-lucide="check-circle-2" style="width: 14px; height: 14px; color: var(--status-paid);"></i> Paid
+                </button>
+              `}
               <button class="btn btn-secondary btn-sm btn-delete-student" onclick="StudentsModule.deleteStudent('${s.id}')" title="Delete Student" style="color: var(--status-unpaid);">
                 <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
               </button>
@@ -849,7 +861,7 @@ const StudentsModule = {
         DashboardModule.renderOutstandingStudentsList();
       }
 
-      if (studentId) {
+      if (studentId && (window.location.hash.includes('student-profile') || StudentsModule.currentProfileStudentId === studentId)) {
         StudentsModule.viewProfile(studentId);
       }
 

@@ -3,7 +3,7 @@
  * Offline App Shell Caching & Installability
  */
 
-const CACHE_NAME = 'edutrack-pwa-v2.4';
+const CACHE_NAME = 'edutrack-pwa-v2.5';
 const APP_SHELL_ASSETS = [
   './',
   './index.html',

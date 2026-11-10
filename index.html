@@ -1593,9 +1593,9 @@
         <span>Attendance</span>
       </a>
 
-      <a href="#monthly-fees" class="mobile-nav-item" data-route="monthly-fees">
-        <i data-lucide="calendar"></i>
-        <span>Fees</span>
+      <a href="#fee-collection" class="mobile-nav-item" data-route="fee-collection">
+        <i data-lucide="credit-card"></i>
+        <span>Payments</span>
       </a>
 
       <a href="#more" class="mobile-nav-item" id="mobile-nav-more-btn" data-route="more">
@@ -1616,9 +1616,9 @@
       </button>
     </div>
     <div class="bottom-sheet-grid">
-      <a href="#fee-collection" class="bottom-sheet-item">
-        <i data-lucide="credit-card"></i>
-        <span>Payments</span>
+      <a href="#monthly-fees" class="bottom-sheet-item">
+        <i data-lucide="calendar"></i>
+        <span>Monthly Fees</span>
       </a>
 
       <a href="#fee-structure" class="bottom-sheet-item">
@@ -1851,7 +1851,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-record-payment')">Cancel</button>
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn btn-primary" id="btn-submit-payment">
             <i data-lucide="check" style="width: 15px; height: 15px;"></i> Confirm Payment & Issue Receipt
           </button>
         </div>

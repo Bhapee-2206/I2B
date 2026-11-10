@@ -240,10 +240,13 @@ const AttendanceModule = {
   },
 
   // Load Attendance Rules from Supabase (Clean silent fallback to default timetable rules)
-  loadProgrammeRules: async () => {
+  rulesLoaded: false,
+  loadProgrammeRules: async (force = false) => {
+    if (AttendanceModule.rulesLoaded && !force) return;
     try {
       if (!supabaseClient) {
         AttendanceModule.programmeRules = AttendanceModule.defaultRules;
+        AttendanceModule.rulesLoaded = true;
         return;
       }
 
@@ -259,6 +262,8 @@ const AttendanceModule = {
       }
     } catch (_) {
       AttendanceModule.programmeRules = AttendanceModule.defaultRules;
+    } finally {
+      AttendanceModule.rulesLoaded = true;
     }
   },
 

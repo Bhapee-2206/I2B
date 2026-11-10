@@ -189,10 +189,16 @@ const PaymentsModule = {
   onStudentSelectChange: (studentId, preselectedInvoiceId = null) => {
     const student = AppState.students.find(s => s.id === studentId);
     const container = document.getElementById('payment-invoices-checklist');
+    const submitBtn = document.getElementById('btn-submit-payment') || document.querySelector('#modal-record-payment button[type="submit"]');
+    const amountInput = document.getElementById('payment-amount-input');
 
     if (!student) {
       container.innerHTML = '<div class="text-muted">Please select a student.</div>';
       PaymentsModule.currentStudentPendingInvoices = [];
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Confirm Payment & Issue Receipt';
+      }
       return;
     }
 
@@ -206,26 +212,68 @@ const PaymentsModule = {
 
     PaymentsModule.currentStudentPendingInvoices = pendingInvoices;
 
+    const outstandingDue = StudentsModule.calculateOutstandingBalance(student);
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+
+    // Check if this student already has paid for the current month
+    const paidThisMonthInv = (student.invoices || []).find(i => 
+      i.billing_month === curMonth && i.billing_year === curYear && i.status === 'paid'
+    );
+    const alreadyPaidThisMonth = !!paidThisMonthInv || (outstandingDue <= 0 && pendingInvoices.length === 0);
+
+    // RULE: Admin should not collect fee from student more than once in the same month
+    if (alreadyPaidThisMonth && pendingInvoices.length === 0) {
+      container.innerHTML = `
+        <div style="background: rgba(16, 185, 129, 0.08); padding: 1rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid rgba(16, 185, 129, 0.35); text-align: center;">
+          <div style="color: var(--status-paid); font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+            <i data-lucide="check-circle-2" style="width: 18px; height: 18px;"></i>
+            Fee Already Collected
+          </div>
+          <div style="margin-top: 0.45rem; color: var(--text-main); font-size: 0.85rem;">
+            <strong>${Utils.escapeHtml(student.name)}</strong> has already paid tuition fees for <strong>${Utils.formatMonthYear(curMonth, curYear)}</strong>.
+          </div>
+          <div style="margin-top: 0.35rem; font-size: 0.78rem; color: var(--text-muted);">
+            Duplicate fee collection in the same month is not allowed. Outstanding balance: ₹0.
+          </div>
+        </div>
+      `;
+      if (amountInput) amountInput.value = '0';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i data-lucide="shield-check" style="width: 15px; height: 15px;"></i> Fee Already Collected (Once Per Month)';
+      }
+      Utils.renderIcons();
+      return;
+    }
+
+    // Re-enable submit button if there are pending fees or unpaid invoices
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Confirm Payment & Issue Receipt';
+    }
+
     if (pendingInvoices.length === 0) {
-      const outstandingDue = StudentsModule.calculateOutstandingBalance(student);
       const monthlyFee = StudentsModule.calculateMonthlyFee(student);
       const feeToCollect = outstandingDue > 0 ? outstandingDue : monthlyFee;
 
       container.innerHTML = `
         <div style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: var(--text-muted);">Current Billing Cycle:</span>
+            <span style="color: var(--text-muted);">Current Billing Cycle: ${Utils.formatMonthYear(curMonth, curYear)}</span>
             <span class="badge ${feeToCollect > 0 ? 'badge-unpaid' : 'badge-paid'}">${feeToCollect > 0 ? 'Pending Fee' : 'Settled'}</span>
           </div>
           <div style="margin-top: 0.45rem; color: var(--accent-blue); font-weight: 700; font-size: 1.05rem;">
             Tuition Fee: ${Utils.formatCurrency(feeToCollect)}
           </div>
           <div style="margin-top: 0.25rem; font-size: 0.74rem; color: var(--text-muted);">
-            Payment will automatically settle this cycle and generate an official computer-verified receipt.
+            Payment will settle this month's tuition fee and generate an official computer-verified receipt.
           </div>
         </div>
       `;
-      document.getElementById('payment-amount-input').value = feeToCollect;
+      if (amountInput) amountInput.value = feeToCollect;
+      Utils.renderIcons();
       return;
     }
 
@@ -290,6 +338,11 @@ const PaymentsModule = {
     }
 
     const student = AppState.students.find(s => s.id === studentId);
+    if (!student) {
+      Utils.showToast("Error", "Student record not found", "error");
+      return;
+    }
+
     let pendingInvoices = (PaymentsModule.currentStudentPendingInvoices && PaymentsModule.currentStudentPendingInvoices.length > 0)
       ? [...PaymentsModule.currentStudentPendingInvoices]
       : (student?.invoices || [])
@@ -299,6 +352,21 @@ const PaymentsModule = {
             (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0
           ))
           .sort((a, b) => (a.billing_year * 100 + a.billing_month) - (b.billing_year * 100 + b.billing_month));
+
+    // RULE: Admin should not collect fee from student more than once in the same month
+    const now = new Date();
+    const pDate = payment_date ? new Date(payment_date) : now;
+    const curMonth = pDate.getMonth() + 1;
+    const curYear = pDate.getFullYear();
+    const outstandingBalance = StudentsModule.calculateOutstandingBalance(student);
+    const paidThisMonthInv = (student?.invoices || []).find(i => 
+      i.billing_month === curMonth && i.billing_year === curYear && i.status === 'paid'
+    );
+
+    if ((paidThisMonthInv || outstandingBalance <= 0) && pendingInvoices.length === 0) {
+      Utils.showToast("Fee Already Collected", `Tuition fee for ${Utils.formatMonthYear(curMonth, curYear)} has already been collected for ${student.name}. Duplicate fee collection in the same month is not allowed.`, "warning", 6000);
+      return;
+    }
 
     // Over-allocation check
     const totalOutstanding = pendingInvoices.reduce((sum, inv) => {

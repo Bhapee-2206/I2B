@@ -14,31 +14,30 @@ const App = {
       const isAuthenticated = await AuthModule.init();
       if (!isAuthenticated) return;
 
-      // 2. Load Core Application Settings from Database
-      await SettingsModule.init();
-
-      // 3. Load Programmes & Fee Structures
-      await ProgrammesModule.init();
-      await FeesModule.init();
-
-      // 4. Load Students, Invoices, Payments & Receipts
-      await StudentsModule.loadStudents();
-      await MonthlyFeesModule.loadInvoices();
-      await PaymentsModule.loadPayments();
-      await ReceiptsModule.loadReceipts();
-
-      // 5. Setup DOM Listeners (Desktop & Mobile Bottom Nav)
+      // 2. Setup DOM Listeners & Instant UI Shell
       App.setupEventListeners();
       App.initPWA();
-
-      // 6. Navigate to initial route
       const initialRoute = window.location.hash.replace('#', '') || 'dashboard';
       App.navigateTo(initialRoute);
-
-      // 7. Initial Lucide icons render
       Utils.renderIcons();
 
-      console.log("EduTrack initialized successfully.");
+      // 3. Fast Parallel Fetch of Application Data
+      await Promise.all([
+        SettingsModule.init(),
+        ProgrammesModule.init(),
+        FeesModule.init(),
+        StudentsModule.loadStudents(),
+        MonthlyFeesModule.loadInvoices(),
+        PaymentsModule.loadPayments(),
+        ReceiptsModule.loadReceipts(),
+        typeof AttendanceModule !== 'undefined' ? AttendanceModule.loadProgrammeRules() : Promise.resolve()
+      ]);
+
+      // 4. Re-render active route with fully populated collections
+      App.navigateTo(App.currentRoute);
+      Utils.renderIcons();
+
+      console.log("EduTrack initialized successfully in parallel.");
     } catch (err) {
       console.error("Application initialization error:", err);
       Utils.showToast("Notice", "Error initializing data. Please verify your connection.", "warning");
