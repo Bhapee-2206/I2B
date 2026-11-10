@@ -39,6 +39,22 @@ const StudentsModule = {
     }
   },
 
+  // Format enrolment description cleanly
+  formatEnrolmentBadge: (e) => {
+    const progName = e.programmes?.name || 'Tuition';
+    const isHindi = progName.toLowerCase().includes('hindi');
+    let levelText = e.class_or_grade;
+    if (isHindi) {
+      const code = FeesModule.normalizeHindiLevel(e.class_or_grade);
+      const hl = FeesModule.HINDI_LEVELS.find(l => l.code === code);
+      levelText = hl ? hl.name : e.class_or_grade;
+    } else {
+      levelText = FeesModule.normalizeSubjectClass(e.class_or_grade);
+    }
+    const variant = e.board ? ` · ${Utils.escapeHtml(e.board)}` : '';
+    return `${Utils.escapeHtml(progName)} (${Utils.escapeHtml(levelText)}${variant})`;
+  },
+
   // Calculate combined monthly fee for active enrolments
   calculateMonthlyFee: (student) => {
     if (!student || !student.enrollments) return 0;
@@ -145,7 +161,7 @@ const StudentsModule = {
         const progBadges = activeEnrollments.length > 0
           ? activeEnrollments.map(e => `
               <span class="badge badge-programme" style="margin: 2px;">
-                ${Utils.escapeHtml(e.programmes?.name || 'Tuition')} (${Utils.escapeHtml(e.class_or_grade)})
+                ${StudentsModule.formatEnrolmentBadge(e)}
               </span>
             `).join('')
           : '<span class="text-muted" style="font-size:0.78rem;">No active programmes</span>';
@@ -206,7 +222,7 @@ const StudentsModule = {
         const progBadges = activeEnrollments.length > 0
           ? activeEnrollments.map(e => `
               <span class="badge badge-programme">
-                ${Utils.escapeHtml(e.programmes?.name || 'Tuition')} (${Utils.escapeHtml(e.class_or_grade)})
+                ${StudentsModule.formatEnrolmentBadge(e)}
               </span>
             `).join('')
           : '<span class="text-muted" style="font-size:0.75rem;">No active programmes</span>';
@@ -288,6 +304,64 @@ const StudentsModule = {
     Utils.openModal('modal-add-student');
   },
 
+  // Dynamic sync of Level / Class and Board / Delivery Type dropdowns
+  syncProgrammeRowFields: (card, initialGrade = null, initialBoard = null) => {
+    const progSelect = card.querySelector('.prog-select');
+    const classLabel = card.querySelector('.prog-class-label');
+    const classSelect = card.querySelector('.prog-class-select');
+    const boardLabel = card.querySelector('.prog-board-label');
+    const boardSelect = card.querySelector('.prog-board-select');
+
+    const progId = progSelect.value;
+    const prog = (AppState.programmes || []).find(p => p.id === progId);
+    const progName = (prog ? prog.name : '').toLowerCase();
+    const isHindi = progName.includes('hindi');
+
+    if (isHindi) {
+      // Category B: Hindi Programme
+      if (classLabel) classLabel.innerHTML = `Hindi Course Level <span class="required">*</span>`;
+      if (boardLabel) boardLabel.innerHTML = `Delivery Type <span class="required">*</span>`;
+
+      const targetLevel = initialGrade ? FeesModule.normalizeHindiLevel(initialGrade) : (classSelect.value || 'BASIC');
+      classSelect.innerHTML = `<option value="">Select Hindi Level</option>` + 
+        FeesModule.HINDI_LEVELS.map(l => `
+          <option value="${l.code}" ${targetLevel === l.code ? 'selected' : ''}>
+            ${l.label}
+          </option>
+        `).join('');
+
+      let targetBoard = initialBoard || boardSelect.value || (progName.includes('online') ? 'Online' : 'Virtual');
+      if (targetBoard.toLowerCase() !== 'online' && targetBoard.toLowerCase() !== 'virtual') {
+        targetBoard = progName.includes('online') ? 'Online' : 'Virtual';
+      }
+      boardSelect.innerHTML = `
+        <option value="Virtual" ${targetBoard.toLowerCase() === 'virtual' ? 'selected' : ''}>Virtual</option>
+        <option value="Online" ${targetBoard.toLowerCase() === 'online' ? 'selected' : ''}>Online</option>
+      `;
+    } else {
+      // Category A: Subject Tuition
+      if (classLabel) classLabel.innerHTML = `School Class <span class="required">*</span>`;
+      if (boardLabel) boardLabel.innerHTML = `School Board <span class="required">*</span>`;
+
+      const targetClass = initialGrade ? FeesModule.normalizeSubjectClass(initialGrade) : (classSelect.value || '5th');
+      classSelect.innerHTML = `<option value="">Select School Class</option>` + 
+        FeesModule.SUBJECT_CLASSES.map(c => `
+          <option value="${c}" ${targetClass === c ? 'selected' : ''}>
+            ${c}${c.endsWith('Standard') || c === 'LKG' || c === 'UKG' ? '' : ' Standard'}
+          </option>
+        `).join('');
+
+      let targetBoard = initialBoard || boardSelect.value || 'Matric';
+      if (targetBoard.toUpperCase() !== 'CBSE' && targetBoard.toUpperCase() !== 'MATRIC') {
+        targetBoard = 'Matric';
+      }
+      boardSelect.innerHTML = `
+        <option value="Matric" ${targetBoard.toUpperCase() === 'MATRIC' ? 'selected' : ''}>Matric</option>
+        <option value="CBSE" ${targetBoard.toUpperCase() === 'CBSE' ? 'selected' : ''}>CBSE</option>
+      `;
+    }
+  },
+
   // Add dynamic programme card in registration / edit form
   addProgrammeRow: (initialData = null) => {
     StudentsModule.activeProgrammeRowCount++;
@@ -297,18 +371,6 @@ const StudentsModule = {
     const progOptions = (AppState.programmes || []).map(p => `
       <option value="${p.id}" ${initialData && initialData.programme_id === p.id ? 'selected' : ''}>
         ${Utils.escapeHtml(p.name)}
-      </option>
-    `).join('');
-
-    const classOptions = (AppState.masterClasses || []).map(c => `
-      <option value="${c}" ${initialData && initialData.class_or_grade === c ? 'selected' : ''}>
-        ${Utils.escapeHtml(c)}
-      </option>
-    `).join('');
-
-    const boardOptions = (AppState.masterBoards || []).map(b => `
-      <option value="${b}" ${initialData && initialData.board === b ? 'selected' : ''}>
-        ${Utils.escapeHtml(b)}
       </option>
     `).join('');
 
@@ -340,24 +402,22 @@ const StudentsModule = {
       <div class="form-row">
         <div class="form-group" style="margin-bottom: 0.5rem;">
           <label class="form-label">Programme <span class="required">*</span></label>
-          <select class="form-control prog-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}')" required>
+          <select class="form-control prog-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}', true)" required>
             <option value="">Select Programme</option>
             ${progOptions}
           </select>
         </div>
 
         <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Class / Grade <span class="required">*</span></label>
-          <select class="form-control prog-class-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}')" required>
-            <option value="">Select Class</option>
-            ${classOptions}
+          <label class="form-label prog-class-label">School Class / Level <span class="required">*</span></label>
+          <select class="form-control prog-class-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}', false)" required>
+            <option value="">Select Class / Level</option>
           </select>
         </div>
 
         <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Board / Category</label>
-          <select class="form-control prog-board-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}')">
-            ${boardOptions}
+          <label class="form-label prog-board-label">Board / Delivery Type <span class="required">*</span></label>
+          <select class="form-control prog-board-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}', false)">
           </select>
         </div>
 
@@ -376,16 +436,22 @@ const StudentsModule = {
     container.appendChild(card);
     Utils.renderIcons();
 
-    if (initialData) {
-      const select = card.querySelector('.prog-select');
-      const classSelect = card.querySelector('.prog-class-select');
-      const boardSelect = card.querySelector('.prog-board-select');
+    // Setup Dropdowns & Initial State
+    const progSelect = card.querySelector('.prog-select');
+    if (initialData && initialData.programme_id) {
+      progSelect.value = initialData.programme_id;
+      StudentsModule.syncProgrammeRowFields(card, initialData.class_or_grade, initialData.board);
       const feeInput = card.querySelector('.prog-fee-input');
-
-      if (select) select.value = initialData.programme_id;
-      if (classSelect) classSelect.value = initialData.class_or_grade;
-      if (boardSelect) boardSelect.value = initialData.board || 'Matric';
-      if (feeInput) feeInput.value = initialData.agreed_fee;
+      if (feeInput && initialData.agreed_fee) {
+        feeInput.value = initialData.agreed_fee;
+        card.dataset.standardFee = initialData.agreed_fee;
+      }
+    } else {
+      if (AppState.programmes && AppState.programmes.length > 0) {
+        progSelect.value = AppState.programmes[0].id;
+        StudentsModule.syncProgrammeRowFields(card);
+        StudentsModule.onProgrammeFieldChange(rowId, false);
+      }
     }
 
     StudentsModule.updateCombinedFeePreview();
@@ -410,9 +476,13 @@ const StudentsModule = {
   },
 
   // EXACT MATCHING fee lookup triggered on dropdown changes
-  onProgrammeFieldChange: (rowId) => {
+  onProgrammeFieldChange: (rowId, isProgChange = false) => {
     const card = document.getElementById(rowId);
     if (!card) return;
+
+    if (isProgChange) {
+      StudentsModule.syncProgrammeRowFields(card);
+    }
 
     const progId = card.querySelector('.prog-select').value;
     const grade = card.querySelector('.prog-class-select').value;
@@ -420,24 +490,30 @@ const StudentsModule = {
     const feeInput = card.querySelector('.prog-fee-input');
     const hint = card.querySelector('.fee-auto-hint');
 
+    const prog = (AppState.programmes || []).find(p => p.id === progId);
+    const progName = (prog ? prog.name : '').toLowerCase();
+    const isHindi = progName.includes('hindi');
+    const cat = isHindi ? 'HINDI' : 'SUBJECT';
+
     if (!progId || !grade) {
       feeInput.value = '';
-      hint.textContent = 'Select programme & class to fetch fee';
+      hint.textContent = isHindi ? 'Select Hindi level to fetch monthly fee' : 'Select school class to fetch monthly fee';
       hint.style.color = 'var(--text-muted)';
       StudentsModule.updateCombinedFeePreview();
       return;
     }
 
-    // Exact matching
-    const fetchedFee = FeesModule.lookupFee(progId, grade, board);
-    if (fetchedFee !== null && fetchedFee !== undefined) {
-      feeInput.value = fetchedFee;
-      hint.textContent = `✓ Exact match fee: ₹${fetchedFee}/mo`;
+    // Central Fee Lookup
+    const lookup = FeesModule.lookupRate(cat, board, grade);
+    if (lookup.success && lookup.monthly_fee !== null) {
+      feeInput.value = lookup.monthly_fee;
+      hint.textContent = `✓ Standard fee: ₹${lookup.monthly_fee}/month`;
       hint.style.color = 'var(--status-paid)';
-      card.dataset.standardFee = fetchedFee;
+      card.dataset.standardFee = lookup.monthly_fee;
     } else {
-      hint.textContent = `⚠️ No fee rule found for ${grade} (${board}). Please set manually.`;
+      hint.textContent = `⚠️ Fee not configured for ${board} - ${grade}. Please enter manually.`;
       hint.style.color = 'var(--status-pending)';
+      card.dataset.standardFee = '';
     }
 
     StudentsModule.updateCombinedFeePreview();
@@ -806,13 +882,26 @@ const StudentsModule = {
       if (!s.enrollments || s.enrollments.length === 0) {
         enrollmentsContainer.innerHTML = `<div class="text-muted" style="padding: 1rem;">No programme enrolments recorded.</div>`;
       } else {
-        enrollmentsContainer.innerHTML = s.enrollments.map(e => `
+        enrollmentsContainer.innerHTML = s.enrollments.map(e => {
+          const progName = e.programmes?.name || 'Tuition';
+          const isHindi = progName.toLowerCase().includes('hindi');
+          let levelDisplay = e.class_or_grade;
+          if (isHindi) {
+            const code = FeesModule.normalizeHindiLevel(e.class_or_grade);
+            const hl = FeesModule.HINDI_LEVELS.find(l => l.code === code);
+            levelDisplay = hl ? hl.label : e.class_or_grade;
+          } else {
+            levelDisplay = FeesModule.normalizeSubjectClass(e.class_or_grade);
+          }
+          const variantLabel = isHindi ? 'Delivery' : 'Board';
+
+          return `
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; border-bottom: 1px solid var(--border-light); flex-wrap: wrap; gap: 0.5rem;">
             <div>
-              <strong style="font-size: 0.95rem; color: var(--text-main);">${Utils.escapeHtml(e.programmes?.name || 'Tuition')}</strong>
+              <strong style="font-size: 0.95rem; color: var(--text-main);">${Utils.escapeHtml(progName)}</strong>
               <div style="font-size: 0.8rem; color: var(--text-muted);">
-                Class: <strong>${Utils.escapeHtml(e.class_or_grade)}</strong> 
-                ${e.board ? `| Board: ${Utils.escapeHtml(e.board)}` : ''} 
+                ${isHindi ? 'Level' : 'Class'}: <strong>${Utils.escapeHtml(levelDisplay)}</strong> 
+                ${e.board ? `| ${variantLabel}: <strong>${Utils.escapeHtml(e.board)}</strong>` : ''} 
                 | Enrolled: ${Utils.formatDate(e.start_date)}
               </div>
             </div>
@@ -826,7 +915,8 @@ const StudentsModule = {
               ` : ''}
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
     }
 

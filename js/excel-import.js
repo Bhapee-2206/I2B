@@ -59,10 +59,11 @@ const ExcelImportModule = {
         const cleanName = name.trim();
         const key = cleanName.toLowerCase();
         if (!studentMap[key]) studentMap[key] = { name: cleanName, programmes: [] };
+        const normGrade = typeof FeesModule !== 'undefined' ? FeesModule.normalizeSubjectClass(grade) : String(grade).trim();
         studentMap[key].programmes.push({
           programmeName: 'Subject',
           programmeCode: 'SUBJECT',
-          classOrGrade: String(grade).trim(),
+          classOrGrade: normGrade,
           board: 'Matric',
           agreedFee: fee || 600
         });
@@ -80,10 +81,11 @@ const ExcelImportModule = {
         const cleanName = name.trim();
         const key = cleanName.toLowerCase();
         if (!studentMap[key]) studentMap[key] = { name: cleanName, programmes: [] };
+        const normGrade = typeof FeesModule !== 'undefined' ? FeesModule.normalizeHindiLevel(grade) : String(grade).trim();
         studentMap[key].programmes.push({
           programmeName: 'Hindi',
           programmeCode: 'HINDI',
-          classOrGrade: String(grade).trim(),
+          classOrGrade: normGrade,
           board: 'Virtual',
           agreedFee: fee || 500
         });
@@ -102,10 +104,11 @@ const ExcelImportModule = {
         const cleanName = name.trim();
         const key = cleanName.toLowerCase();
         if (!studentMap[key]) studentMap[key] = { name: cleanName, programmes: [] };
+        const normGrade = typeof FeesModule !== 'undefined' ? FeesModule.normalizeHindiLevel(grade) : String(grade).trim();
         studentMap[key].programmes.push({
           programmeName: 'Weekend Hindi',
           programmeCode: 'WEEKEND_HINDI',
-          classOrGrade: String(grade).trim(),
+          classOrGrade: normGrade,
           board: 'Virtual',
           agreedFee: fee || 500
         });
@@ -124,10 +127,11 @@ const ExcelImportModule = {
         const cleanName = name.trim();
         const key = cleanName.toLowerCase();
         if (!studentMap[key]) studentMap[key] = { name: cleanName, programmes: [] };
+        const normOnlineGrade = typeof FeesModule !== 'undefined' ? FeesModule.normalizeHindiLevel(grade) : String(grade).trim();
         studentMap[key].programmes.push({
           programmeName: 'Online Hindi',
           programmeCode: 'ONLINE_HINDI',
-          classOrGrade: String(grade).trim(),
+          classOrGrade: normOnlineGrade,
           board: 'Online',
           agreedFee: fee || 700
         });

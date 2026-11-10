@@ -115,27 +115,55 @@ const PromotionsModule = {
     PromotionsModule.selectedEnrollmentForPromotion = targetEnrollment;
     PromotionsModule.selectedEnrollmentStudent = targetStudent;
 
+    const progName = targetEnrollment.programmes?.name || 'Programme';
+    const isHindi = progName.toLowerCase().includes('hindi');
+
     document.getElementById('promo-modal-student-name').textContent = targetStudent.name;
     document.getElementById('promo-modal-student-id').textContent = targetStudent.student_id;
-    document.getElementById('promo-modal-programme').textContent = targetEnrollment.programmes?.name || 'Programme';
-    document.getElementById('promo-modal-current-class').textContent = targetEnrollment.class_or_grade;
+    document.getElementById('promo-modal-programme').textContent = progName;
+
+    // Format current level
+    let currentDisplay = targetEnrollment.class_or_grade;
+    if (isHindi) {
+      const code = FeesModule.normalizeHindiLevel(targetEnrollment.class_or_grade);
+      const hl = FeesModule.HINDI_LEVELS.find(l => l.code === code);
+      currentDisplay = hl ? hl.label : targetEnrollment.class_or_grade;
+    } else {
+      currentDisplay = FeesModule.normalizeSubjectClass(targetEnrollment.class_or_grade);
+    }
+    document.getElementById('promo-modal-current-class').textContent = currentDisplay;
     document.getElementById('promo-modal-current-fee').textContent = Utils.formatCurrency(targetEnrollment.agreed_fee);
 
-    // Populate class options dynamically
+    // Populate class / level options dynamically
     const classSel = document.getElementById('promo-new-class-select');
-    classSel.innerHTML = '<option value="">Select New Class</option>' + 
-      (AppState.masterClasses || []).map(c => `
-        <option value="${c}">${Utils.escapeHtml(c)}</option>
-      `).join('');
-
-    // Populate board options dynamically
     const boardSel = document.getElementById('promo-new-board-select');
-    boardSel.innerHTML = (AppState.masterBoards || []).map(b => `
-      <option value="${b}" ${targetEnrollment.board === b ? 'selected' : ''}>${Utils.escapeHtml(b)}</option>
-    `).join('');
+
+    if (isHindi) {
+      classSel.innerHTML = '<option value="">Select New Hindi Level</option>' + 
+        FeesModule.HINDI_LEVELS.map(l => `
+          <option value="${l.code}">${l.label}</option>
+        `).join('');
+
+      const targetBoard = (targetEnrollment.board || 'Virtual').toLowerCase() === 'online' ? 'Online' : 'Virtual';
+      boardSel.innerHTML = `
+        <option value="Virtual" ${targetBoard === 'Virtual' ? 'selected' : ''}>Virtual</option>
+        <option value="Online" ${targetBoard === 'Online' ? 'selected' : ''}>Online</option>
+      `;
+    } else {
+      classSel.innerHTML = '<option value="">Select New School Class</option>' + 
+        FeesModule.SUBJECT_CLASSES.map(c => `
+          <option value="${c}">${c}${c.endsWith('Standard') || c === 'LKG' || c === 'UKG' ? '' : ' Standard'}</option>
+        `).join('');
+
+      const targetBoard = (targetEnrollment.board || 'Matric').toUpperCase() === 'CBSE' ? 'CBSE' : 'Matric';
+      boardSel.innerHTML = `
+        <option value="Matric" ${targetBoard === 'Matric' ? 'selected' : ''}>Matric</option>
+        <option value="CBSE" ${targetBoard === 'CBSE' ? 'selected' : ''}>CBSE</option>
+      `;
+    }
 
     document.getElementById('promo-new-fee-input').value = '';
-    document.getElementById('promo-auto-fee-hint').textContent = 'Select new class to calculate fee';
+    document.getElementById('promo-auto-fee-hint').textContent = isHindi ? 'Select new level to calculate fee' : 'Select new class to calculate fee';
     document.getElementById('promo-auto-fee-hint').style.color = 'var(--text-muted)';
 
     Utils.openModal('modal-promote-student');
@@ -146,6 +174,10 @@ const PromotionsModule = {
     const e = PromotionsModule.selectedEnrollmentForPromotion;
     if (!e) return;
 
+    const progName = e.programmes?.name || '';
+    const isHindi = progName.toLowerCase().includes('hindi');
+    const cat = isHindi ? 'HINDI' : 'SUBJECT';
+
     const newClass = document.getElementById('promo-new-class-select').value;
     const newBoard = document.getElementById('promo-new-board-select').value;
     const feeInput = document.getElementById('promo-new-fee-input');
@@ -153,18 +185,18 @@ const PromotionsModule = {
 
     if (!newClass) {
       feeInput.value = '';
-      hint.textContent = 'Select new class to calculate fee';
+      hint.textContent = isHindi ? 'Select new level to calculate fee' : 'Select new class to calculate fee';
       hint.style.color = 'var(--text-muted)';
       return;
     }
 
-    const fetchedFee = FeesModule.lookupFee(e.programme_id, newClass, newBoard);
-    if (fetchedFee !== null) {
-      feeInput.value = fetchedFee;
-      hint.textContent = `✓ Standard fee for ${newClass} (${newBoard}): ₹${fetchedFee}/mo`;
+    const lookup = FeesModule.lookupRate(cat, newBoard, newClass);
+    if (lookup.success && lookup.monthly_fee) {
+      feeInput.value = lookup.monthly_fee;
+      hint.textContent = `✓ Standard fee for ${newClass} (${newBoard}): ₹${lookup.monthly_fee}/mo`;
       hint.style.color = 'var(--status-paid)';
     } else {
-      hint.textContent = `⚠️ No exact fee rule found for ${newClass} (${newBoard}). Please enter manually.`;
+      hint.textContent = `⚠️ Rate not configured for ${newBoard} - ${newClass}. Please enter manually.`;
       hint.style.color = 'var(--status-pending)';
     }
   },

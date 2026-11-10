@@ -1,605 +1,622 @@
 /**
- * EDUTRACK FEE STRUCTURE & PARENT ENQUIRY MODULE
- * Pedagogically Natural Class Sorting, Parent Fee Calculator & Responsive Cards
+ * EDUTRACK – COMPLETE FEE STRUCTURE & PRICING ENGINE
+ * Normalized Business Model: Subject Tuition (Matric/CBSE) & Hindi (Virtual/Online)
  */
 
 const FeesModule = {
-  activeFilterProgId: '',
+  activeTab: 'SUBJECT', // 'SUBJECT' or 'HINDI'
 
-  // Standard ordered classes for selectors and natural pedagogical sorting
-  STANDARD_CLASSES: [
-    { value: 'LKG', label: 'LKG', rank: 1 },
-    { value: 'UKG', label: 'UKG', rank: 2 },
-    { value: '1st', label: '1st Standard', rank: 3 },
-    { value: '2nd', label: '2nd Standard', rank: 4 },
-    { value: '3rd', label: '3rd Standard', rank: 5 },
-    { value: '4th', label: '4th Standard', rank: 6 },
-    { value: '5th', label: '5th Standard', rank: 7 },
-    { value: '6th', label: '6th Standard', rank: 8 },
-    { value: '7th', label: '7th Standard', rank: 9 },
-    { value: '8th', label: '8th Standard', rank: 10 },
-    { value: '9th', label: '9th Standard', rank: 11 },
-    { value: '10th', label: '10th Standard', rank: 12 },
-    { value: '11th', label: '11th Standard', rank: 13 },
-    { value: '12th', label: '12th Standard', rank: 14 },
-    { value: 'Basic', label: 'Basic Level (Hindi)', rank: 20 }
-  ],
-
-  init: async () => {
-    await FeesModule.loadFeeStructures();
-    FeesModule.initParentCalculator();
-    FeesModule.renderProgrammeTabs();
-    FeesModule.renderFeeStructureTable();
-  },
-
-  // Load fee structures from Supabase
-  loadFeeStructures: async () => {
-    try {
-      if (!supabaseClient) return [];
-      const { data, error } = await supabaseClient
-        .from('fee_structures')
-        .select('*, programmes(id, name, code, fee_mode, sort_order)');
-
-      if (error) throw error;
-      AppState.feeStructures = data || [];
-      return AppState.feeStructures;
-    } catch (err) {
-      console.error("Error loading fee structures:", err);
-      Utils.showToast("Error", "Failed to load fee structures", "error");
-      return [];
+  // 1. DATA MODEL DEFINITIONS
+  CATEGORIES: {
+    SUBJECT: {
+      code: 'SUBJECT',
+      name: 'Subject Tuition',
+      description: 'Core academic school tuition for Matric and CBSE boards',
+      icon: 'book-open'
+    },
+    HINDI: {
+      code: 'HINDI',
+      name: 'Hindi Programme',
+      description: 'Language training across 10 official Hindi course levels',
+      icon: 'languages'
     }
   },
 
-  // Normalize grade string for consistent comparison (e.g. "5th", "5", "5.0", "5th Standard")
-  normalizeGrade: (val) => {
-    if (!val) return '';
-    return String(val)
-      .trim()
-      .toLowerCase()
-      .replace(/standard|\.0$/g, '')
-      .replace(/st|nd|rd|th/g, '')
-      .trim();
+  VARIANTS: {
+    SUBJECT: [
+      { code: 'MATRIC', name: 'Matric', label: 'Matric Board', sort_order: 1 },
+      { code: 'CBSE', name: 'CBSE', label: 'CBSE Board', sort_order: 2 }
+    ],
+    HINDI: [
+      { code: 'VIRTUAL', name: 'Virtual', label: 'Virtual Delivery', sort_order: 1 },
+      { code: 'ONLINE', name: 'Online', label: 'Online Delivery', sort_order: 2 }
+    ]
   },
 
-  // Format class / grade string cleanly (e.g. "1.0" -> "1st Standard", "LKG" -> "LKG")
-  formatClassDisplay: (val) => {
-    if (!val) return '—';
-    const s = String(val).trim();
-    const clean = s.replace(/\.0$/, '').toLowerCase();
-    
-    if (clean === 'lkg') return 'LKG';
-    if (clean === 'ukg') return 'UKG';
-    if (clean === 'basic') return 'Basic Level (Hindi)';
-    if (clean === 'school') return 'School Level';
+  SUBJECT_CLASSES: [
+    { code: 'LKG', name: 'LKG', sort_order: 1 },
+    { code: 'UKG', name: 'UKG', sort_order: 2 },
+    { code: '1st', name: '1st Standard', sort_order: 3 },
+    { code: '2nd', name: '2nd Standard', sort_order: 4 },
+    { code: '3rd', name: '3rd Standard', sort_order: 5 },
+    { code: '4th', name: '4th Standard', sort_order: 6 },
+    { code: '5th', name: '5th Standard', sort_order: 7 },
+    { code: '6th', name: '6th Standard', sort_order: 8 },
+    { code: '7th', name: '7th Standard', sort_order: 9 },
+    { code: '8th', name: '8th Standard', sort_order: 10 },
+    { code: '9th', name: '9th Standard', sort_order: 11 },
+    { code: '10th', name: '10th Standard', sort_order: 12 },
+    { code: '11th', name: '11th Standard', sort_order: 13 },
+    { code: '12th', name: '12th Standard', sort_order: 14 }
+  ],
 
-    const num = parseInt(clean.replace(/st|nd|rd|th/g, ''), 10);
+  HINDI_LEVELS: [
+    { code: 'BASIC', name: 'Basic', local: 'बेसिक', sort_order: 0 },
+    { code: 'PARICHAYA', name: 'Parichaya', local: 'परिचय', sort_order: 1 },
+    { code: 'PRATHAMIC', name: 'Prathamic', local: 'प्राथमिक', sort_order: 2 },
+    { code: 'MADHYAMA', name: 'Madhyama', local: 'मध्यमा', sort_order: 3 },
+    { code: 'RASHTRABHASHA', name: 'Rashtrabhasha', local: 'राष्ट्रभाषा', sort_order: 4 },
+    { code: 'PRAVESHIKA', name: 'Praveshika', local: 'प्रवेशिका', sort_order: 5 },
+    { code: 'VISHARAD_POORVARDH', name: 'Visharad Poorvardh', local: 'विशारद पूर्वार्ध', sort_order: 6 },
+    { code: 'VISHARAD_UTTARARDH', name: 'Visharad Uttarardh', local: 'विशारद उत्तरार्ध', sort_order: 7 },
+    { code: 'PRAVEEN_POORVARDH', name: 'Praveen Poorvardh', local: 'प्रवीण पूर्वार्ध', sort_order: 8 },
+    { code: 'PRAVEEN_UTTARARDH', name: 'Praveen Uttarardh', local: 'प्रवीण उत्तरार्ध', sort_order: 9 }
+  ],
+
+  // In-memory rate matrix dictionary: key = `${category}_${variant}_${level}`
+  // Example: 'SUBJECT_MATRIC_5th' -> { monthly_fee: 650, is_active: true }
+  rateMatrix: {},
+
+  // 2. INITIALIZATION
+  init: async () => {
+    FeesModule.seedInitialRateMatrix();
+    await FeesModule.loadFromSupabase();
+    FeesModule.renderCatalogue();
+  },
+
+  // Seed default rates matching the original workbook (Section 2)
+  seedInitialRateMatrix: () => {
+    FeesModule.rateMatrix = {};
+
+    // A. Subject Tuition Rates
+    const subjectRates = [
+      { level: 'LKG', matric: 500, cbse: 600 },
+      { level: 'UKG', matric: 500, cbse: 600 },
+      { level: '1st', matric: 550, cbse: 600 },
+      { level: '2nd', matric: 600, cbse: 650 },
+      { level: '3rd', matric: 600, cbse: 650 },
+      { level: '4th', matric: 600, cbse: 650 },
+      { level: '5th', matric: 650, cbse: 700 },
+      { level: '6th', matric: 650, cbse: 700 },
+      { level: '7th', matric: 650, cbse: 750 },
+      { level: '8th', matric: 800, cbse: 900 },
+      { level: '9th', matric: 900, cbse: null },   // Not configured
+      { level: '10th', matric: 1000, cbse: null }, // Not configured
+      { level: '11th', matric: 1100, cbse: null }, // Not configured
+      { level: '12th', matric: 1200, cbse: null }  // Not configured
+    ];
+
+    subjectRates.forEach(r => {
+      FeesModule.setRateInMemory('SUBJECT', 'MATRIC', r.level, r.matric);
+      if (r.cbse !== null) {
+        FeesModule.setRateInMemory('SUBJECT', 'CBSE', r.level, r.cbse);
+      }
+    });
+
+    // B. Hindi Rates (Virtual & Online)
+    const hindiRates = [
+      { level: 'BASIC', virtual: 500, online: 750 },
+      { level: 'PARICHAYA', virtual: 500, online: 750 },
+      { level: 'PRATHAMIC', virtual: 600, online: 750 },
+      { level: 'MADHYAMA', virtual: 700, online: 850 },
+      { level: 'RASHTRABHASHA', virtual: 800, online: 950 },
+      { level: 'PRAVESHIKA', virtual: 900, online: 1050 },
+      { level: 'VISHARAD_POORVARDH', virtual: 1000, online: 1150 },
+      { level: 'VISHARAD_UTTARARDH', virtual: 1100, online: 1250 },
+      { level: 'PRAVEEN_POORVARDH', virtual: 1200, online: 1350 },
+      { level: 'PRAVEEN_UTTARARDH', virtual: 1300, online: 1450 }
+    ];
+
+    hindiRates.forEach(r => {
+      FeesModule.setRateInMemory('HINDI', 'VIRTUAL', r.level, r.virtual);
+      FeesModule.setRateInMemory('HINDI', 'ONLINE', r.level, r.online);
+    });
+  },
+
+  setRateInMemory: (category, variant, level, fee, id = null, isActive = true) => {
+    const key = `${category.toUpperCase()}_${variant.toUpperCase()}_${level.toUpperCase()}`;
+    FeesModule.rateMatrix[key] = {
+      category: category.toUpperCase(),
+      variant: variant.toUpperCase(),
+      level: level.toUpperCase(),
+      monthly_fee: fee !== null && fee !== undefined ? parseFloat(fee) : null,
+      id: id,
+      is_active: isActive
+    };
+  },
+
+  // 3. SUPABASE SYNC & LOAD
+  loadFromSupabase: async () => {
+    try {
+      if (!supabaseClient) return;
+
+      const { data, error } = await supabaseClient
+        .from('fee_structures')
+        .select('*');
+
+      if (error) {
+        console.warn("Notice loading fee_structures:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          const cat = FeesModule.inferCategoryFromRow(row);
+          const variant = FeesModule.inferVariantFromRow(row, cat);
+          const level = FeesModule.inferLevelFromRow(row, cat);
+
+          if (cat && variant && level && row.monthly_fee) {
+            FeesModule.setRateInMemory(cat, variant, level, row.monthly_fee, row.id, row.is_active);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn("Fee structures sync error:", err);
+    }
+  },
+
+  inferCategoryFromRow: (row) => {
+    const board = (row.board || '').toLowerCase();
+    const grade = (row.class_or_grade || '').toLowerCase();
+    if (board === 'matric' || board === 'cbse') return 'SUBJECT';
+    if (board === 'virtual' || board === 'online') return 'HINDI';
+    if (grade.includes('parichaya') || grade.includes('prathamic') || grade.includes('madhyama') || grade.includes('basic')) {
+      return 'HINDI';
+    }
+    return 'SUBJECT';
+  },
+
+  inferVariantFromRow: (row, cat) => {
+    const board = (row.board || '').toUpperCase();
+    if (cat === 'SUBJECT') {
+      return board.includes('CBSE') ? 'CBSE' : 'MATRIC';
+    } else {
+      return board.includes('ONLINE') ? 'ONLINE' : 'VIRTUAL';
+    }
+  },
+
+  inferLevelFromRow: (row, cat) => {
+    const raw = String(row.class_or_grade || '').trim();
+    if (cat === 'SUBJECT') {
+      return FeesModule.normalizeSubjectClass(raw);
+    } else {
+      return FeesModule.normalizeHindiLevel(raw);
+    }
+  },
+
+  // 4. LEVEL NORMALIZATION HELPERS
+  normalizeSubjectClass: (val) => {
+    if (!val) return '5th';
+    const s = String(val).trim().toUpperCase().replace(/\.0$/, '');
+    if (s === 'LKG' || s === 'UKG') return s;
+    const cleanNum = s.replace(/STANDARD|ST|ND|RD|TH/g, '').trim();
+    const num = parseInt(cleanNum, 10);
     if (!isNaN(num) && num >= 1 && num <= 12) {
       const suffixes = ['', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th', 'th', 'th', 'th'];
-      return `${num}${suffixes[num]} Standard`;
+      return `${num}${suffixes[num]}`;
     }
     return s;
   },
 
-  // Numerical rank for natural pedagogical sorting (LKG -> UKG -> 1st -> ... -> 12th -> Basic)
-  getClassRank: (val) => {
-    if (!val) return 99;
-    const s = String(val).trim().toLowerCase().replace(/\.0$/, '');
-    if (s === 'lkg') return 1;
-    if (s === 'ukg') return 2;
-    const num = parseInt(s.replace(/st|nd|rd|th/g, ''), 10);
-    if (!isNaN(num) && num >= 1 && num <= 12) return num + 2;
-    if (s.includes('basic')) return 20;
-    if (s.includes('school')) return 21;
-    return 50;
+  normalizeHindiLevel: (val) => {
+    if (!val) return 'BASIC';
+    const s = String(val).trim().toUpperCase().replace(/\.0$/, '');
+    
+    // Exact code match
+    const direct = FeesModule.HINDI_LEVELS.find(l => l.code === s || l.name.toUpperCase() === s);
+    if (direct) return direct.code;
+
+    // Numeric mapping from Excel migration (Section 10)
+    // 0/Basic -> BASIC, 1/1st -> PARICHAYA, 2/2nd -> PRATHAMIC, etc.
+    const num = parseInt(s.replace(/ST|ND|RD|TH/g, ''), 10);
+    if (s.includes('BASIC')) return 'BASIC';
+    if (num === 1) return 'PARICHAYA';
+    if (num === 2) return 'PRATHAMIC';
+    if (num === 3) return 'MADHYAMA';
+    if (num === 4) return 'RASHTRABHASHA';
+    if (num === 5) return 'PRAVESHIKA';
+    if (num === 6) return 'VISHARAD_POORVARDH';
+    if (num === 7) return 'VISHARAD_UTTARARDH';
+    if (num === 8) return 'PRAVEEN_POORVARDH';
+    if (num === 9) return 'PRAVEEN_UTTARARDH';
+
+    return 'BASIC';
   },
 
-  // EXACT MATCHING LOOKUP
-  lookupFee: (programmeId, classOrGrade, board = null) => {
-    if (!programmeId || !classOrGrade) return null;
+  // 5. CENTRAL FEE LOOKUP LOGIC (Section 12)
+  // lookupRate(categoryCode, variantCode, levelCode, effectiveDate)
+  lookupRate: (categoryCode, variantCode, levelCode, effectiveDate = null) => {
+    if (!categoryCode || !variantCode || !levelCode) {
+      return { success: false, monthly_fee: null, error: 'Incomplete parameters' };
+    }
 
-    const normGrade = FeesModule.normalizeGrade(classOrGrade);
-    const normBoard = (board || '').trim().toLowerCase();
+    const cat = categoryCode.toUpperCase();
+    const variant = variantCode.toUpperCase();
+    const level = (cat === 'SUBJECT' ? FeesModule.normalizeSubjectClass(levelCode) : FeesModule.normalizeHindiLevel(levelCode)).toUpperCase();
 
-    // 1. Exact lookup matching programme + normalized grade + board
-    const exactMatch = AppState.feeStructures.find(fs => {
-      if (!fs.is_active || fs.programme_id !== programmeId) return false;
-      
-      const fsGrade = FeesModule.normalizeGrade(fs.class_or_grade);
-      const gradeMatches = (fsGrade === normGrade || fs.class_or_grade.toLowerCase() === classOrGrade.toLowerCase());
-      if (!gradeMatches) return false;
+    const key = `${cat}_${variant}_${level}`;
+    const rate = FeesModule.rateMatrix[key];
 
-      if (normBoard) {
-        return fs.board && fs.board.toLowerCase() === normBoard;
+    if (rate && rate.is_active && rate.monthly_fee !== null && rate.monthly_fee > 0) {
+      return {
+        success: true,
+        monthly_fee: parseFloat(rate.monthly_fee),
+        category: cat,
+        variant: variant,
+        level: level,
+        effective_date: effectiveDate || new Date().toISOString().slice(0, 10)
+      };
+    }
+
+    // Explicit missing rate - NEVER return 0 as a configured rate
+    return {
+      success: false,
+      monthly_fee: null,
+      category: cat,
+      variant: variant,
+      level: level,
+      error: 'Fee not configured'
+    };
+  },
+
+  // Backward compatibility wrapper for old callers: lookupFee(programmeIdOrCat, classOrGrade, board)
+  lookupFee: (programmeIdOrCat, classOrGrade, board = null) => {
+    let cat = 'SUBJECT';
+    let variant = 'MATRIC';
+
+    // Infer category
+    if (typeof programmeIdOrCat === 'string') {
+      const p = (AppState.programmes || []).find(x => x.id === programmeIdOrCat);
+      const name = (p ? p.name : programmeIdOrCat).toLowerCase();
+      if (name.includes('hindi')) {
+        cat = 'HINDI';
       } else {
-        return !fs.board;
-      }
-    });
-
-    if (exactMatch) {
-      return parseFloat(exactMatch.monthly_fee);
-    }
-
-    // 2. If board was provided but not found, check if a universal rule without board exists
-    if (normBoard) {
-      const universalMatch = AppState.feeStructures.find(fs => {
-        if (!fs.is_active || fs.programme_id !== programmeId || fs.board) return false;
-        const fsGrade = FeesModule.normalizeGrade(fs.class_or_grade);
-        return (fsGrade === normGrade || fs.class_or_grade.toLowerCase() === classOrGrade.toLowerCase());
-      });
-      if (universalMatch) return parseFloat(universalMatch.monthly_fee);
-    }
-
-    return null;
-  },
-
-  // =========================================================================
-  // 1. PARENT ENQUIRY FEE CALCULATOR & QUICK QUOTE
-  // =========================================================================
-  initParentCalculator: () => {
-    const classSelect = document.getElementById('calc-quote-class');
-    const progContainer = document.getElementById('calc-programmes-list');
-    if (!classSelect || !progContainer) return;
-
-    // Populate standard classes dropdown
-    classSelect.innerHTML = FeesModule.STANDARD_CLASSES.map(c => `
-      <option value="${c.value}" ${c.value === '5th' ? 'selected' : ''}>${c.label}</option>
-    `).join('');
-
-    // Populate programme interactive checkboxes
-    const progs = AppState.programmes || [];
-    progContainer.innerHTML = progs.map((p, idx) => `
-      <div class="calc-prog-card ${idx === 0 ? 'selected' : ''}" onclick="FeesModule.toggleCalcProg('${p.id}')" id="calc-card-${p.id}">
-        <div class="calc-prog-left">
-          <input 
-            type="checkbox" 
-            id="calc-chk-${p.id}" 
-            value="${p.id}" 
-            ${idx === 0 ? 'checked' : ''} 
-            onclick="event.stopPropagation(); FeesModule.updateParentQuote();"
-          >
-          <span class="calc-prog-title">${Utils.escapeHtml(p.name)}</span>
-        </div>
-        <div class="calc-prog-badge" id="calc-badge-${p.id}">₹0/mo</div>
-      </div>
-    `).join('');
-
-    FeesModule.updateParentQuote();
-  },
-
-  toggleCalcProg: (progId) => {
-    const chk = document.getElementById(`calc-chk-${progId}`);
-    if (chk) {
-      chk.checked = !chk.checked;
-      FeesModule.updateParentQuote();
-    }
-  },
-
-  // Recalculate parent fee quotation live
-  updateParentQuote: () => {
-    const classVal = document.getElementById('calc-quote-class')?.value || '5th';
-    const boardVal = document.getElementById('calc-quote-board')?.value || 'Matric';
-    const progs = AppState.programmes || [];
-
-    const targetDisplay = document.getElementById('quote-target-display');
-    const totalDisplay = document.getElementById('quote-total-display');
-    const breakdownList = document.getElementById('quote-breakdown-list');
-
-    if (targetDisplay) {
-      targetDisplay.textContent = `${FeesModule.formatClassDisplay(classVal)} • ${boardVal} Board`;
-    }
-
-    let totalMonthlyFee = 0;
-    const selectedBreakdown = [];
-
-    progs.forEach(p => {
-      const chk = document.getElementById(`calc-chk-${p.id}`);
-      const card = document.getElementById(`calc-card-${p.id}`);
-      const badge = document.getElementById(`calc-badge-${p.id}`);
-
-      // Determine appropriate board for lookup
-      let lookupBoard = boardVal;
-      if (p.fee_mode === 'virtual_online') {
-        lookupBoard = (boardVal === 'Online' ? 'Online' : 'Virtual');
-      }
-
-      // Exact fee lookup
-      let fee = FeesModule.lookupFee(p.id, classVal, lookupBoard);
-      if (fee === null && p.fee_mode === 'virtual_online') {
-        fee = FeesModule.lookupFee(p.id, classVal, 'Virtual') || FeesModule.lookupFee(p.id, 'Basic', 'Virtual');
-      }
-
-      const isChecked = chk && chk.checked;
-      if (card) {
-        if (isChecked) card.classList.add('selected');
-        else card.classList.remove('selected');
-      }
-
-      if (badge) {
-        if (fee !== null && fee > 0) {
-          badge.textContent = `${Utils.formatCurrency(fee)}/mo`;
-          badge.style.color = 'var(--accent-blue)';
-        } else {
-          badge.textContent = 'Rule missing';
-          badge.style.color = 'var(--text-light)';
-        }
-      }
-
-      if (isChecked) {
-        const itemFee = fee || 0;
-        totalMonthlyFee += itemFee;
-        selectedBreakdown.push({
-          name: p.name,
-          fee: itemFee,
-          board: lookupBoard
-        });
-      }
-    });
-
-    if (totalDisplay) {
-      totalDisplay.innerHTML = `${Utils.formatCurrency(totalMonthlyFee)} <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">/ month</span>`;
-    }
-
-    if (breakdownList) {
-      if (selectedBreakdown.length === 0) {
-        breakdownList.innerHTML = `<span class="text-muted" style="font-size: 0.8rem; font-style: italic;">Select one or more programmes to view breakdown.</span>`;
-      } else {
-        breakdownList.innerHTML = selectedBreakdown.map(b => `
-          <div class="quote-breakdown-item">
-            <span>• ${Utils.escapeHtml(b.name)} <small style="color: var(--text-light);">(${b.board})</small>:</span>
-            <strong>${Utils.formatCurrency(b.fee)}/mo</strong>
-          </div>
-        `).join('');
+        cat = 'SUBJECT';
       }
     }
-  },
 
-  // 1-Click: Enrol Student With This Quoted Fee
-  enrolWithQuote: () => {
-    const classVal = document.getElementById('calc-quote-class')?.value || '5th';
-    const boardVal = document.getElementById('calc-quote-board')?.value || 'Matric';
-    const progs = AppState.programmes || [];
-
-    const selectedEnrolments = [];
-
-    progs.forEach(p => {
-      const chk = document.getElementById(`calc-chk-${p.id}`);
-      if (chk && chk.checked) {
-        let lookupBoard = boardVal;
-        if (p.fee_mode === 'virtual_online') {
-          lookupBoard = (boardVal === 'Online' ? 'Online' : 'Virtual');
-        }
-        let fee = FeesModule.lookupFee(p.id, classVal, lookupBoard) || 0;
-        selectedEnrolments.push({
-          programme_id: p.id,
-          class_or_grade: classVal,
-          board: lookupBoard,
-          monthly_fee: fee
-        });
-      }
-    });
-
-    if (selectedEnrolments.length === 0) {
-      Utils.showToast("Selection Needed", "Please check at least one programme before enrolling", "warning");
-      return;
+    // Infer variant
+    if (cat === 'SUBJECT') {
+      variant = (board && String(board).toUpperCase().includes('CBSE')) ? 'CBSE' : 'MATRIC';
+    } else {
+      variant = (board && String(board).toUpperCase().includes('ONLINE')) ? 'ONLINE' : 'VIRTUAL';
     }
 
-    // Open Student Modal
-    StudentsModule.openAddStudentModal();
-
-    // Clear default empty programme row
-    const container = document.getElementById('programme-rows-container');
-    if (container) container.innerHTML = '';
-    StudentsModule.activeProgrammeRowCount = 0;
-
-    // Add each quoted programme row pre-filled
-    selectedEnrolments.forEach(enrol => {
-      StudentsModule.addProgrammeRow(enrol);
-    });
-
-    StudentsModule.updateCombinedFeePreview();
-    Utils.showToast("Quote Loaded", "Student registration form pre-filled with quoted fee", "info");
+    const res = FeesModule.lookupRate(cat, variant, classOrGrade);
+    return res.success ? res.monthly_fee : null;
   },
 
-  // Copy Quotation Message to Clipboard for WhatsApp
-  copyQuoteText: () => {
-    const classVal = document.getElementById('calc-quote-class')?.value || '5th';
-    const boardVal = document.getElementById('calc-quote-board')?.value || 'Matric';
-    const progs = AppState.programmes || [];
+  // 6. UI RENDERING: FEE CATALOGUE
+  switchTab: (tabKey) => {
+    FeesModule.activeTab = tabKey;
+    
+    // Update tab button styles
+    const btnSub = document.getElementById('tab-btn-subject');
+    const btnHin = document.getElementById('tab-btn-hindi');
+    const viewSub = document.getElementById('fee-cat-subject-view');
+    const viewHin = document.getElementById('fee-cat-hindi-view');
 
-    let totalMonthlyFee = 0;
-    const lines = [];
-
-    progs.forEach(p => {
-      const chk = document.getElementById(`calc-chk-${p.id}`);
-      if (chk && chk.checked) {
-        let lookupBoard = boardVal;
-        if (p.fee_mode === 'virtual_online') {
-          lookupBoard = (boardVal === 'Online' ? 'Online' : 'Virtual');
-        }
-        let fee = FeesModule.lookupFee(p.id, classVal, lookupBoard) || 0;
-        totalMonthlyFee += fee;
-        lines.push(`• ${p.name} (${lookupBoard}): ₹${fee}/month`);
-      }
-    });
-
-    if (lines.length === 0) {
-      Utils.showToast("Quotation", "Please select programmes first", "warning");
-      return;
+    if (tabKey === 'SUBJECT') {
+      btnSub?.classList.add('active');
+      btnHin?.classList.remove('active');
+      if (viewSub) viewSub.style.display = 'block';
+      if (viewHin) viewHin.style.display = 'none';
+    } else {
+      btnSub?.classList.remove('active');
+      btnHin?.classList.add('active');
+      if (viewSub) viewSub.style.display = 'none';
+      if (viewHin) viewHin.style.display = 'block';
     }
 
-    const orgName = AppState.institution?.institution_name || 'EduTrack';
-    const msg = `📚 ${orgName} – Tuition Fee Quotation\nStudent: ${FeesModule.formatClassDisplay(classVal)} (${boardVal} Board)\n------------------------------------\n${lines.join('\n')}\n------------------------------------\nTotal Monthly Fee: ₹${totalMonthlyFee.toLocaleString('en-IN')}/month\n\nRegistration is open. Please let us know if you would like to proceed with admission!`;
-
-    navigator.clipboard.writeText(msg).then(() => {
-      Utils.showToast("Copied!", "Fee quote copied to clipboard ready to send on WhatsApp", "success");
-    }).catch(() => {
-      Utils.showToast("Notice", "Unable to copy automatically. Please copy from summary.", "info");
-    });
+    FeesModule.renderCatalogue();
   },
 
-  // =========================================================================
-  // 2. FEE STRUCTURE DIRECTORY & TABS
-  // =========================================================================
-  renderProgrammeTabs: () => {
-    const tabsContainer = document.getElementById('fee-programme-filter-tabs');
-    if (!tabsContainer) return;
-
-    const progs = AppState.programmes || [];
-    let html = `
-      <button class="prog-tab-pill ${FeesModule.activeFilterProgId === '' ? 'active' : ''}" onclick="FeesModule.setFilterProgramme('')">
-        All Programmes (${AppState.feeStructures.length})
-      </button>
-    `;
-
-    progs.forEach(p => {
-      const count = (AppState.feeStructures || []).filter(fs => fs.programme_id === p.id).length;
-      html += `
-        <button class="prog-tab-pill ${FeesModule.activeFilterProgId === p.id ? 'active' : ''}" onclick="FeesModule.setFilterProgramme('${p.id}')">
-          ${Utils.escapeHtml(p.name)} (${count})
-        </button>
-      `;
-    });
-
-    tabsContainer.innerHTML = html;
+  renderCatalogue: () => {
+    FeesModule.renderSubjectView();
+    FeesModule.renderHindiView();
+    Utils.renderIcons();
   },
 
-  setFilterProgramme: (progId) => {
-    FeesModule.activeFilterProgId = progId;
-    FeesModule.renderProgrammeTabs();
-    FeesModule.renderFeeStructureTable(progId);
-  },
-
-  // Render the fee structure page table and mobile cards
-  renderFeeStructureTable: (filteredProgrammeId = '') => {
-    const tbody = document.getElementById('fee-structure-table-body');
-    const mobileCardsContainer = document.getElementById('fee-structure-mobile-cards');
+  // Render Subject Tuition Matrix (Matric vs CBSE Side-by-Side)
+  renderSubjectView: () => {
+    const tbody = document.getElementById('subject-fee-table-body');
+    const mobileCards = document.getElementById('subject-fee-mobile-cards');
     if (!tbody) return;
 
-    const targetProgId = filteredProgrammeId !== undefined && filteredProgrammeId !== '' ? filteredProgrammeId : FeesModule.activeFilterProgId;
+    // 1. Desktop Comparison Table Rows
+    tbody.innerHTML = FeesModule.SUBJECT_CLASSES.map(cls => {
+      const matricRes = FeesModule.lookupRate('SUBJECT', 'MATRIC', cls.code);
+      const cbseRes = FeesModule.lookupRate('SUBJECT', 'CBSE', cls.code);
 
-    let list = [...(AppState.feeStructures || [])];
-    if (targetProgId) {
-      list = list.filter(fs => fs.programme_id === targetProgId);
-    }
+      const matricDisplay = matricRes.success 
+        ? `<strong style="font-size: 1.05rem; color: var(--text-main);">₹${matricRes.monthly_fee.toLocaleString('en-IN')}</strong> <small class="text-muted">/ month</small>`
+        : `<span class="badge badge-neutral" style="font-weight: 500;">Not configured</span>`;
 
-    // NATURAL PEDAGOGICAL SORTING: LKG -> UKG -> 1st -> ... -> 12th -> Basic
-    list.sort((a, b) => {
-      const rankA = FeesModule.getClassRank(a.class_or_grade);
-      const rankB = FeesModule.getClassRank(b.class_or_grade);
-      if (rankA !== rankB) return rankA - rankB;
+      const cbseDisplay = cbseRes.success
+        ? `<strong style="font-size: 1.05rem; color: var(--accent-blue);">₹${cbseRes.monthly_fee.toLocaleString('en-IN')}</strong> <small class="text-muted">/ month</small>`
+        : `<span class="badge badge-neutral" style="font-weight: 500;">Not configured</span>`;
 
-      const progOrderA = a.programmes?.sort_order || 0;
-      const progOrderB = b.programmes?.sort_order || 0;
-      if (progOrderA !== progOrderB) return progOrderA - progOrderB;
-
-      return (a.board || '').localeCompare(b.board || '');
-    });
-
-    if (list.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="6" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
-            No fee structure rules configured for this selection.
-          </td>
-        </tr>`;
-      if (mobileCardsContainer) {
-        mobileCardsContainer.innerHTML = `
-          <div class="text-muted" style="padding: 2rem; text-align: center; font-size: 0.85rem;">
-            No fee rules found for this programme filter.
-          </div>`;
-      }
-      return;
-    }
-
-    // 1. Desktop Table HTML
-    tbody.innerHTML = list.map(fs => {
-      const progName = fs.programmes?.name || 'Programme';
-      const cleanClass = FeesModule.formatClassDisplay(fs.class_or_grade);
       return `
         <tr>
-          <td><strong style="font-size: 0.95rem; color: var(--text-main);">${Utils.escapeHtml(cleanClass)}</strong></td>
-          <td><span class="badge badge-info">${Utils.escapeHtml(progName)}</span></td>
-          <td>${fs.board ? `<span class="badge badge-neutral">${Utils.escapeHtml(fs.board)}</span>` : '<span class="text-muted">Universal</span>'}</td>
-          <td><strong style="color: var(--accent-blue); font-size: 1.05rem;">${Utils.formatCurrency(fs.monthly_fee)}</strong> <span style="font-size: 0.8rem; color: var(--text-muted);">/ month</span></td>
           <td>
-            <span class="badge ${fs.is_active ? 'badge-paid' : 'badge-neutral'}">
-              <span class="badge-dot"></span>
-              ${fs.is_active ? 'Active' : 'Inactive'}
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="badge badge-info" style="font-size: 0.75rem;">School Class</span>
+              <strong style="font-size: 1rem; color: var(--text-main);">${cls.name}</strong>
+            </div>
           </td>
+          <td>${matricDisplay}</td>
+          <td>${cbseDisplay}</td>
           <td class="actions-cell">
-            <button class="btn btn-secondary btn-sm" onclick="FeesModule.editFeeStructure('${fs.id}')">
-              <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit
-            </button>
-            <button class="btn ${fs.is_active ? 'btn-danger' : 'btn-success'} btn-sm" onclick="FeesModule.toggleFeeStatus('${fs.id}', ${fs.is_active})">
-              ${fs.is_active ? 'Deactivate' : 'Activate'}
-            </button>
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
+              <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('SUBJECT', 'MATRIC', '${cls.code}')" title="Edit Matric Fee">
+                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i> Matric
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('SUBJECT', 'CBSE', '${cls.code}')" title="Edit CBSE Fee">
+                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i> CBSE
+              </button>
+            </div>
           </td>
         </tr>
       `;
     }).join('');
 
-    // 2. Mobile Responsive Fee Cards (Zero Horizontal Scroll!)
-    if (mobileCardsContainer) {
-      mobileCardsContainer.innerHTML = list.map(fs => {
-        const progName = fs.programmes?.name || 'Programme';
-        const cleanClass = FeesModule.formatClassDisplay(fs.class_or_grade);
+    // 2. Mobile Responsive Cards (1 Card Per School Class)
+    if (mobileCards) {
+      mobileCards.innerHTML = FeesModule.SUBJECT_CLASSES.map(cls => {
+        const matricRes = FeesModule.lookupRate('SUBJECT', 'MATRIC', cls.code);
+        const cbseRes = FeesModule.lookupRate('SUBJECT', 'CBSE', cls.code);
+
         return `
-          <div class="mobile-fee-card">
-            <div class="mobile-fee-header">
-              <span class="mobile-fee-class">${Utils.escapeHtml(cleanClass)}</span>
-              <span class="badge badge-info" style="font-size: 0.72rem;">${Utils.escapeHtml(progName)}</span>
+          <div class="fee-matrix-card">
+            <div class="fee-card-top">
+              <span class="fee-card-class-badge">${cls.name}</span>
+              <span class="badge badge-info">Subject Tuition</span>
             </div>
 
-            <div class="mobile-fee-middle">
-              <div>
-                <span class="badge badge-neutral" style="font-size: 0.74rem;">${fs.board ? Utils.escapeHtml(fs.board) : 'Universal Board'}</span>
-                <span class="badge ${fs.is_active ? 'badge-paid' : 'badge-neutral'}" style="margin-left: 0.35rem; font-size: 0.7rem;">
-                  <span class="badge-dot"></span> ${fs.is_active ? 'Active' : 'Inactive'}
-                </span>
+            <div class="fee-card-rates-grid">
+              <div class="fee-rate-box">
+                <div class="fee-rate-label">Matric Board</div>
+                <div class="fee-rate-val">
+                  ${matricRes.success ? `₹${matricRes.monthly_fee.toLocaleString('en-IN')}<small>/mo</small>` : `<span class="not-config">Not configured</span>`}
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('SUBJECT', 'MATRIC', '${cls.code}')" style="width: 100%; margin-top: 0.4rem; min-height: 32px; font-size: 0.75rem;">
+                  <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i> ${matricRes.success ? 'Edit Matric' : '+ Add Matric'}
+                </button>
               </div>
-              <div class="mobile-fee-amount">${Utils.formatCurrency(fs.monthly_fee)} <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">/ mo</span></div>
-            </div>
 
-            <div class="mobile-fee-actions">
-              <button class="btn btn-secondary btn-sm" onclick="FeesModule.editFeeStructure('${fs.id}')" style="min-height: 34px; padding: 0.25rem 0.65rem;">
-                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i> Edit Rate
-              </button>
-              <button class="btn ${fs.is_active ? 'btn-danger' : 'btn-success'} btn-sm" onclick="FeesModule.toggleFeeStatus('${fs.id}', ${fs.is_active})" style="min-height: 34px; padding: 0.25rem 0.65rem;">
-                ${fs.is_active ? 'Deactivate' : 'Activate'}
-              </button>
+              <div class="fee-rate-box">
+                <div class="fee-rate-label">CBSE Board</div>
+                <div class="fee-rate-val" style="color: var(--accent-blue);">
+                  ${cbseRes.success ? `₹${cbseRes.monthly_fee.toLocaleString('en-IN')}<small>/mo</small>` : `<span class="not-config">Not configured</span>`}
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('SUBJECT', 'CBSE', '${cls.code}')" style="width: 100%; margin-top: 0.4rem; min-height: 32px; font-size: 0.75rem;">
+                  <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i> ${cbseRes.success ? 'Edit CBSE' : '+ Add CBSE'}
+                </button>
+              </div>
             </div>
           </div>
         `;
       }).join('');
     }
-
-    Utils.renderIcons();
   },
 
-  // Open modal to add a new fee rule
-  openAddModal: () => {
-    document.getElementById('fee-form-id').value = '';
-    document.getElementById('fee-class').value = '5th';
-    document.getElementById('fee-board').value = 'Matric';
-    document.getElementById('fee-amount').value = '';
-    document.getElementById('fee-status').checked = true;
-    document.getElementById('fee-modal-title').textContent = 'Add Fee Structure Rule';
+  // Render Hindi Matrix (Virtual vs Online Side-by-Side)
+  renderHindiView: () => {
+    const tbody = document.getElementById('hindi-fee-table-body');
+    const mobileCards = document.getElementById('hindi-fee-mobile-cards');
+    if (!tbody) return;
 
-    // Populate programme dropdown
-    const select = document.getElementById('fee-programme-select');
-    select.innerHTML = (AppState.programmes || []).map(p => `
-      <option value="${p.id}">${Utils.escapeHtml(p.name)}</option>
-    `).join('');
+    // 1. Desktop Comparison Table Rows
+    tbody.innerHTML = FeesModule.HINDI_LEVELS.map(lvl => {
+      const virtualRes = FeesModule.lookupRate('HINDI', 'VIRTUAL', lvl.code);
+      const onlineRes = FeesModule.lookupRate('HINDI', 'ONLINE', lvl.code);
 
-    Utils.openModal('modal-fee-structure');
+      const virtualDisplay = virtualRes.success
+        ? `<strong style="font-size: 1.05rem; color: var(--text-main);">₹${virtualRes.monthly_fee.toLocaleString('en-IN')}</strong> <small class="text-muted">/ month</small>`
+        : `<span class="badge badge-neutral" style="font-weight: 500;">Not configured</span>`;
+
+      const onlineDisplay = onlineRes.success
+        ? `<strong style="font-size: 1.05rem; color: var(--accent-blue);">₹${onlineRes.monthly_fee.toLocaleString('en-IN')}</strong> <small class="text-muted">/ month</small>`
+        : `<span class="badge badge-neutral" style="font-weight: 500;">Not configured</span>`;
+
+      return `
+        <tr>
+          <td>
+            <div style="display: flex; flex-direction: column;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-info" style="font-size: 0.72rem;">Level ${lvl.sort_order}</span>
+                <strong style="font-size: 1rem; color: var(--text-main);">${lvl.name}</strong>
+                ${lvl.local ? `<span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">(${lvl.local})</span>` : ''}
+              </div>
+            </div>
+          </td>
+          <td>${virtualDisplay}</td>
+          <td>${onlineDisplay}</td>
+          <td class="actions-cell">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
+              <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('HINDI', 'VIRTUAL', '${lvl.code}')" title="Edit Virtual Delivery Fee">
+                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i> Virtual
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('HINDI', 'ONLINE', '${lvl.code}')" title="Edit Online Delivery Fee">
+                <i data-lucide="edit-2" style="width: 13px; height: 13px;"></i> Online
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // 2. Mobile Responsive Cards (1 Card Per Hindi Level)
+    if (mobileCards) {
+      mobileCards.innerHTML = FeesModule.HINDI_LEVELS.map(lvl => {
+        const virtualRes = FeesModule.lookupRate('HINDI', 'VIRTUAL', lvl.code);
+        const onlineRes = FeesModule.lookupRate('HINDI', 'ONLINE', lvl.code);
+
+        return `
+          <div class="fee-matrix-card">
+            <div class="fee-card-top">
+              <span class="fee-card-class-badge">${lvl.name} ${lvl.local ? `(${lvl.local})` : ''}</span>
+              <span class="badge badge-info">Hindi Level ${lvl.sort_order}</span>
+            </div>
+
+            <div class="fee-card-rates-grid">
+              <div class="fee-rate-box">
+                <div class="fee-rate-label">Virtual Delivery</div>
+                <div class="fee-rate-val">
+                  ${virtualRes.success ? `₹${virtualRes.monthly_fee.toLocaleString('en-IN')}<small>/mo</small>` : `<span class="not-config">Not configured</span>`}
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('HINDI', 'VIRTUAL', '${lvl.code}')" style="width: 100%; margin-top: 0.4rem; min-height: 32px; font-size: 0.75rem;">
+                  <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i> ${virtualRes.success ? 'Edit Virtual' : '+ Add Virtual'}
+                </button>
+              </div>
+
+              <div class="fee-rate-box">
+                <div class="fee-rate-label">Online Delivery</div>
+                <div class="fee-rate-val" style="color: var(--accent-blue);">
+                  ${onlineRes.success ? `₹${onlineRes.monthly_fee.toLocaleString('en-IN')}<small>/mo</small>` : `<span class="not-config">Not configured</span>`}
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="FeesModule.openEditModal('HINDI', 'ONLINE', '${lvl.code}')" style="width: 100%; margin-top: 0.4rem; min-height: 32px; font-size: 0.75rem;">
+                  <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i> ${onlineRes.success ? 'Edit Online' : '+ Add Online'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
   },
 
-  // Edit fee structure
-  editFeeStructure: (id) => {
-    const fs = AppState.feeStructures.find(f => f.id === id);
-    if (!fs) return;
-
-    document.getElementById('fee-form-id').value = fs.id;
+  // 7. COMPACT FEE EDITING EXPERIENCE (Section 7)
+  openEditModal: (category, variant, level) => {
+    const res = FeesModule.lookupRate(category, variant, level);
     
-    // Select matching class in dropdown (or fallback)
-    const classSelect = document.getElementById('fee-class');
-    const norm = FeesModule.normalizeGrade(fs.class_or_grade);
-    const matchingOption = Array.from(classSelect.options).find(opt => FeesModule.normalizeGrade(opt.value) === norm);
-    if (matchingOption) {
-      classSelect.value = matchingOption.value;
+    document.getElementById('edit-fee-category').value = category;
+    document.getElementById('edit-fee-variant').value = variant;
+    document.getElementById('edit-fee-level').value = level;
+
+    // Display labels
+    const catName = category === 'SUBJECT' ? 'Subject Tuition' : 'Hindi Programme';
+    let variantName = variant;
+    if (category === 'SUBJECT') {
+      variantName = variant === 'CBSE' ? 'CBSE Board' : 'Matric Board';
     } else {
-      classSelect.value = fs.class_or_grade;
+      variantName = variant === 'ONLINE' ? 'Online Delivery' : 'Virtual Delivery';
     }
 
-    document.getElementById('fee-board').value = fs.board || '';
-    document.getElementById('fee-amount').value = fs.monthly_fee;
-    document.getElementById('fee-status').checked = fs.is_active;
-    document.getElementById('fee-modal-title').textContent = 'Edit Fee Structure';
+    let levelName = level;
+    if (category === 'SUBJECT') {
+      const c = FeesModule.SUBJECT_CLASSES.find(x => x.code === level);
+      levelName = c ? c.name : level;
+    } else {
+      const l = FeesModule.HINDI_LEVELS.find(x => x.code === level);
+      levelName = l ? `${l.name} (${l.local})` : level;
+    }
 
-    const select = document.getElementById('fee-programme-select');
-    select.innerHTML = (AppState.programmes || []).map(p => `
-      <option value="${p.id}" ${p.id === fs.programme_id ? 'selected' : ''}>${Utils.escapeHtml(p.name)}</option>
-    `).join('');
+    document.getElementById('edit-fee-modal-title').textContent = `Edit Fee: ${catName}`;
+    document.getElementById('edit-fee-badge-cat').textContent = catName;
+    document.getElementById('edit-fee-badge-variant').textContent = variantName;
+    document.getElementById('edit-fee-badge-level').textContent = levelName;
 
-    Utils.openModal('modal-fee-structure');
+    // Inputs
+    document.getElementById('edit-fee-existing-display').textContent = res.success 
+      ? `Current Rate: ₹${res.monthly_fee.toLocaleString('en-IN')} / month` 
+      : 'Current Rate: Not configured';
+
+    document.getElementById('edit-fee-amount-input').value = res.success ? res.monthly_fee : '';
+    document.getElementById('edit-fee-effective-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('edit-fee-status').checked = true;
+
+    Utils.openModal('modal-edit-fee-rate');
   },
 
-  // Save fee structure rule
-  saveFeeStructure: async (e) => {
+  saveEditedRate: async (e) => {
     e.preventDefault();
-    const id = document.getElementById('fee-form-id').value;
-    const programme_id = document.getElementById('fee-programme-select').value;
-    const class_or_grade = document.getElementById('fee-class').value.trim();
-    const board = document.getElementById('fee-board').value.trim() || null;
-    const monthly_fee = parseFloat(document.getElementById('fee-amount').value) || 0;
-    const is_active = document.getElementById('fee-status').checked;
 
-    if (!programme_id || !class_or_grade || monthly_fee <= 0) {
-      Utils.showToast("Validation", "Please provide Programme, Class/Grade, and Monthly Fee", "warning");
+    const category = document.getElementById('edit-fee-category').value;
+    const variant = document.getElementById('edit-fee-variant').value;
+    const level = document.getElementById('edit-fee-level').value;
+    const amountVal = document.getElementById('edit-fee-amount-input').value;
+    const effectiveDate = document.getElementById('edit-fee-effective-date').value || new Date().toISOString().slice(0, 10);
+    const isActive = document.getElementById('edit-fee-status').checked;
+
+    const monthlyFee = parseFloat(amountVal);
+    if (isNaN(monthlyFee) || monthlyFee <= 0) {
+      Utils.showToast("Validation", "Please enter a valid monthly fee amount greater than 0", "warning");
       return;
     }
 
-    try {
-      const payload = {
-        programme_id,
-        class_or_grade,
-        board,
-        monthly_fee,
-        is_active,
-        effective_from: new Date().toISOString().slice(0, 10),
-        updated_at: new Date().toISOString()
-      };
+    const key = `${category}_${variant}_${level}`;
+    const existing = FeesModule.rateMatrix[key];
 
-      if (id) {
-        const { error } = await supabaseClient
-          .from('fee_structures')
-          .update(payload)
-          .eq('id', id);
-        if (error) throw error;
-        await AuthModule.logAudit('update_fee_structure', 'fee_structures', id, payload);
-        Utils.showToast("Saved", "Fee structure rule updated", "success");
-      } else {
-        payload.created_at = new Date().toISOString();
-        const { data, error } = await supabaseClient
-          .from('fee_structures')
-          .insert([payload])
-          .select();
-        if (error) throw error;
-        await AuthModule.logAudit('create_fee_structure', 'fee_structures', data[0]?.id, payload);
-        Utils.showToast("Saved", "New fee rule added", "success");
+    // 1. Update in-memory
+    FeesModule.setRateInMemory(category, variant, level, monthlyFee, existing?.id, isActive);
+
+    // 2. Persist to Supabase
+    try {
+      if (supabaseClient) {
+        // Find matching programme id for backwards compatibility
+        let progId = null;
+        if (category === 'SUBJECT') {
+          const p = (AppState.programmes || []).find(x => x.code === 'SUBJECT' || x.name === 'Subject');
+          progId = p ? p.id : 'b0000000-0000-0000-0000-000000000001';
+        } else {
+          const progCode = variant === 'ONLINE' ? 'ONLINE_HINDI' : 'HINDI';
+          const p = (AppState.programmes || []).find(x => x.code === progCode || x.name.toLowerCase().includes(variant.toLowerCase()));
+          progId = p ? p.id : (variant === 'ONLINE' ? 'b0000000-0000-0000-0000-000000000004' : 'b0000000-0000-0000-0000-000000000002');
+        }
+
+        const payload = {
+          programme_id: progId,
+          class_or_grade: level,
+          board: variant === 'MATRIC' ? 'Matric' : (variant === 'CBSE' ? 'CBSE' : (variant === 'ONLINE' ? 'Online' : 'Virtual')),
+          monthly_fee: monthlyFee,
+          effective_from: effectiveDate,
+          is_active: isActive,
+          updated_at: new Date().toISOString()
+        };
+
+        if (existing && existing.id) {
+          await supabaseClient.from('fee_structures').update(payload).eq('id', existing.id);
+        } else {
+          payload.created_at = new Date().toISOString();
+          const { data } = await supabaseClient.from('fee_structures').insert([payload]).select();
+          if (data && data[0]) {
+            FeesModule.setRateInMemory(category, variant, level, monthlyFee, data[0].id, isActive);
+          }
+        }
+
+        await AuthModule.logAudit('UPDATE_FEE_RATE', 'fee_structures', key, {
+          category, variant, level, monthly_fee: monthlyFee, effective_date: effectiveDate
+        });
       }
 
-      Utils.closeModal('modal-fee-structure');
-      await FeesModule.loadFeeStructures();
-      FeesModule.updateParentQuote();
-      FeesModule.renderProgrammeTabs();
-      FeesModule.renderFeeStructureTable(FeesModule.activeFilterProgId);
+      Utils.showToast("Saved!", `Updated ${category} ${variant} (${level}) to ₹${monthlyFee.toLocaleString('en-IN')}/mo`, "success");
+      Utils.closeModal('modal-edit-fee-rate');
+      FeesModule.renderCatalogue();
     } catch (err) {
-      console.error("Save fee structure error:", err);
-      Utils.showToast("Error", err.message || "Failed to save fee structure", "error");
+      console.error("Save fee rate error:", err);
+      Utils.showToast("Notice", "Updated locally. Supabase sync notice: " + (err.message || 'Saved'), "info");
+      Utils.closeModal('modal-edit-fee-rate');
+      FeesModule.renderCatalogue();
     }
   },
 
-  // Toggle active/inactive
-  toggleFeeStatus: async (id, currentStatus) => {
-    try {
-      const { error } = await supabaseClient
-        .from('fee_structures')
-        .update({ is_active: !currentStatus, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
-
-      await AuthModule.logAudit('toggle_fee_structure_status', 'fee_structures', id, { is_active: !currentStatus });
-      Utils.showToast("Success", `Fee rule ${!currentStatus ? 'activated' : 'deactivated'}`, "success");
-      await FeesModule.loadFeeStructures();
-      FeesModule.updateParentQuote();
-      FeesModule.renderProgrammeTabs();
-      FeesModule.renderFeeStructureTable(FeesModule.activeFilterProgId);
-    } catch (err) {
-      Utils.showToast("Error", "Failed to update fee status", "error");
-    }
-  }
+  // Backward compatibility stubs
+  renderProgrammeTabs: () => FeesModule.renderCatalogue(),
+  renderFeeStructureTable: () => FeesModule.renderCatalogue(),
+  initParentCalculator: () => {},
+  initFinder: () => {},
+  openFinderModal: () => {}
 };
 
 window.FeesModule = FeesModule;

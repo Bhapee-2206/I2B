@@ -696,125 +696,91 @@
              6. FEE STRUCTURE VIEW
              =================================================================== -->
         <section class="page-view" id="view-fee-structure">
-          
-          <!-- 1. INTERACTIVE PARENT FEE CALCULATOR & QUICK QUOTE CARD -->
-          <div class="card" style="border-top: 4px solid var(--accent-blue);">
-            <div class="card-header">
-              <div>
-                <div class="card-title">
-                  <i data-lucide="calculator" style="color: var(--accent-blue); width: 20px; height: 20px;"></i>
-                  <span>Parent Fee Calculator & Quick Quote</span>
-                </div>
-                <div class="card-subtitle">Select a student's class and programmes to instantly quote an accurate, transparent monthly fee to parents</div>
-              </div>
-            </div>
-
-            <div class="fee-calc-grid">
-              <!-- Left: Selectors & Programme Checklist -->
-              <div>
-                <div class="form-row" style="margin-bottom: 0.85rem;">
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" for="calc-quote-class">Student Class / Grade</label>
-                    <select id="calc-quote-class" class="form-control" onchange="FeesModule.updateParentQuote()">
-                      <!-- Populated dynamically with clean natural classes -->
-                    </select>
-                  </div>
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" for="calc-quote-board">School Board</label>
-                    <select id="calc-quote-board" class="form-control" onchange="FeesModule.updateParentQuote()">
-                      <option value="Matric">Matric</option>
-                      <option value="CBSE">CBSE</option>
-                      <option value="Virtual">Virtual</option>
-                      <option value="Online">Online</option>
-                    </select>
-                  </div>
-                </div>
-
-                <label class="form-label" style="margin-bottom: 0.4rem;">Select Enrolment Programmes:</label>
-                <div id="calc-programmes-list" class="calc-prog-list">
-                  <!-- Populated dynamically with interactive programme cards -->
-                </div>
-              </div>
-
-              <!-- Right: Live Quote Box -->
-              <div class="quote-box">
-                <div>
-                  <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
-                    Parent Quotation Summary
-                  </div>
-                  <div id="quote-target-display" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.5rem;">
-                    5th Standard • Matric
-                  </div>
-                  <div id="quote-total-display" style="font-size: 2.2rem; font-weight: 800; color: var(--accent-blue); line-height: 1.1; margin-bottom: 0.75rem;">
-                    ₹0 <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">/ month</span>
-                  </div>
-
-                  <div style="border-top: 1px solid var(--border-light); padding-top: 0.65rem; margin-bottom: 1rem;">
-                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase;">Fee Breakdown:</div>
-                    <div id="quote-breakdown-list">
-                      <!-- Itemized fees -->
-                    </div>
-                  </div>
-                </div>
-
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
-                  <button class="btn btn-primary" onclick="FeesModule.enrolWithQuote()" style="flex: 1; min-height: 42px; justify-content: center;">
-                    <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
-                    <span>Enrol Student With This Fee</span>
-                  </button>
-                  <button class="btn btn-secondary" onclick="FeesModule.copyQuoteText()" title="Copy Quote Text for WhatsApp / SMS">
-                    <i data-lucide="copy" style="width: 15px; height: 15px;"></i>
-                    <span>Copy Quote</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. FEE STRUCTURE DIRECTORY -->
           <div class="card">
+            <!-- Page Header -->
             <div class="card-header">
               <div>
-                <div class="card-title">
-                  <i data-lucide="table-2" style="width: 18px; height: 18px;"></i>
-                  <span>Fee Structure Directory</span>
-                </div>
-                <div class="card-subtitle">Tuition fee rates per programme, class/grade and board (Naturally ordered)</div>
-              </div>
-              <div class="card-actions">
-                <button class="btn btn-primary btn-sm" onclick="FeesModule.openAddModal()">
-                  <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Fee Rule
-                </button>
+                <div class="card-title">Fee Structure</div>
+                <div class="card-subtitle">Monthly tuition rates for Subject and Hindi programmes</div>
               </div>
             </div>
 
-            <!-- Programme Filter Pills Strip -->
-            <div class="prog-filter-tabs" id="fee-programme-filter-tabs">
-              <!-- Populated dynamically -->
+            <!-- Main Navigation Inside Fee Structure: TWO Primary Sections (Section 3) -->
+            <div class="fee-category-tabs-wrap">
+              <button class="fee-cat-tab active" id="tab-btn-subject" onclick="FeesModule.switchTab('SUBJECT')">
+                <i data-lucide="book-open" style="width: 16px; height: 16px;"></i>
+                <span>Subject Tuition</span>
+                <span class="badge badge-neutral" style="font-size: 0.72rem; margin-left: 0.35rem;">Matric & CBSE</span>
+              </button>
+              <button class="fee-cat-tab" id="tab-btn-hindi" onclick="FeesModule.switchTab('HINDI')">
+                <i data-lucide="languages" style="width: 16px; height: 16px;"></i>
+                <span>Hindi</span>
+                <span class="badge badge-neutral" style="font-size: 0.72rem; margin-left: 0.35rem;">Virtual & Online</span>
+              </button>
             </div>
 
-            <!-- Desktop Table View -->
-            <div class="table-responsive desktop-table-container">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Class / Grade</th>
-                    <th>Programme</th>
-                    <th>Board / Category</th>
-                    <th>Monthly Fee</th>
-                    <th>Status</th>
-                    <th style="text-align: right;">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="fee-structure-table-body">
-                  <!-- Dynamically populated -->
-                </tbody>
-              </table>
+            <!-- ===============================================================
+                 A. SUBJECT TUITION VIEW (Section 4)
+                 =============================================================== -->
+            <div id="fee-cat-subject-view">
+              <div style="background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                <span>Subject Tuition monthly fees for all 14 school classes. Compare Matric and CBSE prices side by side.</span>
+                <span class="badge badge-info">14 School Classes</span>
+              </div>
+
+              <!-- Desktop Comparison Matrix -->
+              <div class="table-responsive desktop-table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 30%;">School Class</th>
+                      <th style="width: 25%;">Matric / Month</th>
+                      <th style="width: 25%;">CBSE / Month</th>
+                      <th style="text-align: right; width: 20%;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subject-fee-table-body">
+                    <!-- Populated dynamically with side-by-side Matric & CBSE rates -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Mobile Matrix: One Card Per School Class (Section 8) -->
+              <div class="mobile-cards-list" id="subject-fee-mobile-cards">
+                <!-- Stacked cards with Matric & CBSE rates side by side -->
+              </div>
             </div>
 
-            <!-- Mobile Fee Cards View (Zero Horizontal Scroll!) -->
-            <div class="mobile-cards-list" id="fee-structure-mobile-cards">
-              <!-- Dynamically populated mobile cards -->
+            <!-- ===============================================================
+                 B. HINDI VIEW (Section 5)
+                 =============================================================== -->
+            <div id="fee-cat-hindi-view" style="display: none;">
+              <div style="background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; margin-bottom: 1rem; font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                <span>Hindi Programme monthly fees across all 10 official course levels. Compare Virtual and Online delivery rates side by side.</span>
+                <span class="badge badge-info">10 Course Levels</span>
+              </div>
+
+              <!-- Desktop Comparison Matrix -->
+              <div class="table-responsive desktop-table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 35%;">Hindi Course Level</th>
+                      <th style="width: 25%;">Virtual Delivery / Month</th>
+                      <th style="width: 25%;">Online Delivery / Month</th>
+                      <th style="text-align: right; width: 15%;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hindi-fee-table-body">
+                    <!-- Populated dynamically with side-by-side Virtual & Online rates -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Mobile Matrix: One Card Per Hindi Level (Section 8) -->
+              <div class="mobile-cards-list" id="hindi-fee-mobile-cards">
+                <!-- Stacked cards with Virtual & Online rates side by side -->
+              </div>
             </div>
           </div>
         </section>
@@ -1701,77 +1667,60 @@
     </div>
   </div>
 
-  <!-- 7. FEE STRUCTURE MODAL -->
-  <div class="modal-overlay" id="modal-fee-structure">
+
+  <!-- COMPACT RATE EDITING MODAL (Section 7) -->
+  <div class="modal-overlay" id="modal-edit-fee-rate">
     <div class="modal-dialog">
       <div class="modal-header">
-        <div class="modal-title" id="fee-modal-title">Fee Rule</div>
-        <button class="modal-close-btn" onclick="Utils.closeModal('modal-fee-structure')">
+        <div class="modal-title" id="edit-fee-modal-title">Edit Tuition Fee Rate</div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-edit-fee-rate')">
           <i data-lucide="x" style="width: 18px; height: 18px;"></i>
         </button>
       </div>
 
-      <form onsubmit="FeesModule.saveFeeStructure(event)">
+      <form onsubmit="FeesModule.saveEditedRate(event)">
         <div class="modal-body">
-          <input type="hidden" id="fee-form-id">
+          <input type="hidden" id="edit-fee-category">
+          <input type="hidden" id="edit-fee-variant">
+          <input type="hidden" id="edit-fee-level">
 
-          <div class="form-group">
-            <label class="form-label">Programme <span class="required">*</span></label>
-            <select id="fee-programme-select" class="form-control" required>
-              <!-- Dynamically populated -->
-            </select>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Class / Grade <span class="required">*</span></label>
-              <select id="fee-class" class="form-control" required>
-                <option value="LKG">LKG</option>
-                <option value="UKG">UKG</option>
-                <option value="1st">1st Standard</option>
-                <option value="2nd">2nd Standard</option>
-                <option value="3rd">3rd Standard</option>
-                <option value="4th">4th Standard</option>
-                <option value="5th">5th Standard</option>
-                <option value="6th">6th Standard</option>
-                <option value="7th">7th Standard</option>
-                <option value="8th">8th Standard</option>
-                <option value="9th">9th Standard</option>
-                <option value="10th">10th Standard</option>
-                <option value="11th">11th Standard</option>
-                <option value="12th">12th Standard</option>
-                <option value="Basic">Basic Level (Hindi)</option>
-              </select>
+          <div style="background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.85rem; margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="badge badge-info" id="edit-fee-badge-cat">Subject Tuition</span>
+              <span class="badge badge-neutral" id="edit-fee-badge-variant">Matric Board</span>
             </div>
-
-            <div class="form-group">
-              <label class="form-label">Board / Category</label>
-              <select id="fee-board" class="form-control">
-                <option value="Matric">Matric</option>
-                <option value="CBSE">CBSE</option>
-                <option value="Virtual">Virtual</option>
-                <option value="Online">Online</option>
-                <option value="">Universal / No Board</option>
-              </select>
+            <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main);" id="edit-fee-badge-level">
+              5th Standard
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);" id="edit-fee-existing-display">
+              Current Rate: ₹650 / month
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Monthly Fee (₹) <span class="required">*</span></label>
-            <input type="number" id="fee-amount" class="form-control" min="1" step="any" placeholder="0" required>
+            <label class="form-label" for="edit-fee-amount-input">Monthly Fee Amount (₹) <span class="required">*</span></label>
+            <input type="number" id="edit-fee-amount-input" class="form-control" min="1" step="any" placeholder="Enter amount in ₹" required style="font-size: 1.1rem; font-weight: 700;">
+            <div class="form-hint" style="font-size: 0.75rem; color: var(--text-muted);">
+              Editing this rate will apply to future student enrolments and fee lookups. Historical invoices remain preserved.
+            </div>
           </div>
 
           <div class="form-group">
+            <label class="form-label" for="edit-fee-effective-date">Effective From Date</label>
+            <input type="date" id="edit-fee-effective-date" class="form-control">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" id="fee-status" checked>
-              <span>Active Rule</span>
+              <input type="checkbox" id="edit-fee-status" checked>
+              <span style="font-size: 0.88rem; font-weight: 600;">Active Rate</span>
             </label>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-fee-structure')">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Fee Rule</button>
+          <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-edit-fee-rate')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>
     </div>

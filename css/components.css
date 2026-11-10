@@ -729,3 +729,112 @@
   justify-content: flex-end;
   gap: 0.4rem;
 }
+
+/* Redesigned Category Tabs & Rate Cards */
+.fee-category-tabs-wrap {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  background: var(--surface-subtle);
+  padding: 0.35rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  width: fit-content;
+}
+
+.fee-cat-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.fee-cat-tab:hover {
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.fee-cat-tab.active {
+  background: #ffffff;
+  color: var(--primary-navy);
+  box-shadow: var(--shadow-card);
+  font-weight: 700;
+}
+
+.fee-matrix-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  box-shadow: var(--shadow-subtle);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fee-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fee-card-class-badge {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.fee-card-rates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.fee-rate-box {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.fee-rate-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+}
+
+.fee-rate-val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.fee-rate-val small {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fee-rate-val .not-config {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-light);
+  font-style: italic;
+}
