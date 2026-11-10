@@ -151,9 +151,11 @@ const PromotionsModule = {
       `;
     } else {
       classSel.innerHTML = '<option value="">Select New School Class</option>' + 
-        FeesModule.SUBJECT_CLASSES.map(c => `
-          <option value="${c}">${c}${c.endsWith('Standard') || c === 'LKG' || c === 'UKG' ? '' : ' Standard'}</option>
-        `).join('');
+        FeesModule.SUBJECT_CLASSES.map(c => {
+          const code = typeof c === 'object' ? c.code : c;
+          const name = typeof c === 'object' ? c.name : c;
+          return `<option value="${code}">${name}</option>`;
+        }).join('');
 
       const targetBoard = (targetEnrollment.board || 'Matric').toUpperCase() === 'CBSE' ? 'CBSE' : 'Matric';
       boardSel.innerHTML = `

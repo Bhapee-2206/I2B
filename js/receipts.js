@@ -189,125 +189,137 @@ const ReceiptsModule = {
     Utils.renderIcons();
   },
 
+  // Generate jsPDF instance and File object for a receipt
+  createReceiptPDF: (r) => {
+    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+      throw new Error("jsPDF library is not loaded");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a5'
+    });
+
+    const inst = AppState.institution;
+    const s = r.students;
+    const p = r.payments;
+
+    // Header Banner (Navy #0f172a)
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 148, 28, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(inst?.institution_name || "EDUTRACK INSTITUTION", 14, 11);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(inst?.subtitle || "Student & Monthly Fee Management", 14, 17);
+    doc.text(inst?.contact_phone ? `Phone: ${inst.contact_phone} | Email: ${inst.contact_email || ''}` : '', 14, 22);
+
+    // Receipt Box
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14, 32, 120, 13, 2, 2, 'F');
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text("OFFICIAL PAYMENT RECEIPT", 18, 40);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Receipt #: ${r.receipt_number}`, 78, 38);
+    doc.text(`Date: ${Utils.formatDate(r.issue_date)}`, 78, 43);
+
+    // Student Info
+    doc.setFontSize(9);
+    doc.text("Student ID:", 14, 53);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${s?.student_id || '—'}`, 40, 53);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Student Name:", 14, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${s?.name || '—'}`, 40, 60);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Parent Name:", 14, 67);
+    doc.text(`${s?.parent_name || '—'}`, 40, 67);
+
+    doc.text("WhatsApp Phone:", 14, 74);
+    doc.text(`${s?.whatsapp_number || '—'}`, 40, 74);
+
+    // Line
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 80, 134, 80);
+
+    // Table Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text("Description", 14, 88);
+    doc.text("Payment Mode", 70, 88);
+    doc.text("Amount Received", 106, 88);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Tuition Fee Collection", 14, 96);
+    doc.text(`${p?.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 70, 96);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(16, 185, 129); // Green
+    doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 106, 96);
+
+    // Line
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 104, 134, 104);
+
+    // Financial Summary
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.text("Total Paid This Transaction:", 55, 113);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 110, 113);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Remaining Balance Pending:", 55, 120);
+    doc.setFont('helvetica', 'bold');
+    const bal = r.remaining_balance || 0;
+    doc.setTextColor(bal > 0 ? 239 : 16, bal > 0 ? 68 : 185, bal > 0 ? 68 : 129);
+    doc.text(`INR ${bal.toLocaleString('en-IN')}`, 110, 120);
+
+    // Footer
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.text(inst?.receipt_footer || "This is an official computer generated receipt. Thank you for your payment!", 14, 138);
+
+    // Signatory
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text("Authorized Signatory", 100, 153);
+    doc.line(95, 148, 134, 148);
+
+    const filename = `Receipt_${r.receipt_number}.pdf`;
+    const blob = doc.output('blob');
+    let file = null;
+    try {
+      file = new File([blob], filename, { type: 'application/pdf' });
+    } catch (_) {}
+
+    return { doc, blob, file, filename };
+  },
+
   // Download PDF using jsPDF
   downloadPDF: () => {
     const r = ReceiptsModule.currentReceipt;
     if (!r) return;
 
     try {
-      if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
-        alert("PDF generator is initializing. Please try again in a moment.");
-        return;
-      }
-
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a5'
-      });
-
-      const inst = AppState.institution;
-      const s = r.students;
-      const p = r.payments;
-
-      // Header Banner (Navy #0f172a)
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, 148, 28, 'F');
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(inst?.institution_name || "EDUTRACK INSTITUTION", 14, 11);
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text(inst?.subtitle || "Student & Monthly Fee Management", 14, 17);
-      doc.text(inst?.contact_phone ? `Phone: ${inst.contact_phone} | Email: ${inst.contact_email || ''}` : '', 14, 22);
-
-      // Receipt Box
-      doc.setFillColor(241, 245, 249);
-      doc.roundedRect(14, 32, 120, 13, 2, 2, 'F');
-
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(9.5);
-      doc.setFont('helvetica', 'bold');
-      doc.text("OFFICIAL PAYMENT RECEIPT", 18, 40);
-
-      doc.setFontSize(8.5);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Receipt #: ${r.receipt_number}`, 78, 38);
-      doc.text(`Date: ${Utils.formatDate(r.issue_date)}`, 78, 43);
-
-      // Student Info
-      doc.setFontSize(9);
-      doc.text("Student ID:", 14, 53);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${s?.student_id || '—'}`, 40, 53);
-
-      doc.setFont('helvetica', 'normal');
-      doc.text("Student Name:", 14, 60);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${s?.name || '—'}`, 40, 60);
-
-      doc.setFont('helvetica', 'normal');
-      doc.text("Parent Name:", 14, 67);
-      doc.text(`${s?.parent_name || '—'}`, 40, 67);
-
-      doc.text("WhatsApp Phone:", 14, 74);
-      doc.text(`${s?.whatsapp_number || '—'}`, 40, 74);
-
-      // Line
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, 80, 134, 80);
-
-      // Table Header
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.text("Description", 14, 88);
-      doc.text("Payment Mode", 70, 88);
-      doc.text("Amount Received", 106, 88);
-
-      doc.setFont('helvetica', 'normal');
-      doc.text("Tuition Fee Collection", 14, 96);
-      doc.text(`${p?.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 70, 96);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(16, 185, 129); // Green
-      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 106, 96);
-
-      // Line
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, 104, 134, 104);
-
-      // Financial Summary
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'normal');
-      doc.text("Total Paid This Transaction:", 55, 113);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 110, 113);
-
-      doc.setFont('helvetica', 'normal');
-      doc.text("Remaining Balance Pending:", 55, 120);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(r.remaining_balance > 0 ? 239 : 16, r.remaining_balance > 0 ? 68 : 185, r.remaining_balance > 0 ? 68 : 129);
-      doc.text(`INR ${r.remaining_balance.toLocaleString('en-IN')}`, 110, 120);
-
-      // Footer
-      doc.setTextColor(100, 116, 139);
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'italic');
-      doc.text(inst?.receipt_footer || "This is an official computer generated receipt. Thank you for your payment!", 14, 138);
-
-      // Signatory
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text("Authorized Signatory", 100, 153);
-      doc.line(95, 148, 134, 148);
-
-      doc.save(`Receipt_${r.receipt_number}.pdf`);
+      const pdfData = ReceiptsModule.createReceiptPDF(r);
+      pdfData.doc.save(pdfData.filename);
       Utils.showToast("Receipt Downloaded", `Receipt ${r.receipt_number} saved as PDF`, "success");
-
     } catch (e) {
       console.error("PDF generation error:", e);
       Utils.showToast("Notice", "Failed to generate PDF. You can use Print instead.", "warning");
@@ -319,48 +331,99 @@ const ReceiptsModule = {
     window.print();
   },
 
-  // Share Receipt through WhatsApp (Section 12)
-  shareViaWhatsApp: (receiptId) => {
-    const r = AppState.receipts.find(item => item.id === receiptId);
-    if (!r) return;
+  // FREE Native WhatsApp Receipt Sharing (Web Share API + Desktop Fallback)
+  // No Meta API, no paid services, 100% free
+  shareViaWhatsApp: async (receiptId = null) => {
+    let r = ReceiptsModule.currentReceipt;
+    if (receiptId && (!r || r.id !== receiptId)) {
+      r = (AppState.receipts || []).find(item => item.id === receiptId);
+      if (!r && supabaseClient) {
+        try {
+          const { data } = await supabaseClient
+            .from('receipts')
+            .select(`*, students (*), payments (*, payment_allocations (*, invoices (*)))`)
+            .eq('id', receiptId)
+            .single();
+          r = data;
+        } catch (_) {}
+      }
+    }
+
+    if (!r) {
+      Utils.showToast("Notice", "Receipt record not found", "warning");
+      return;
+    }
 
     ReceiptsModule.currentReceipt = r;
     const s = r.students;
     const inst = AppState.institution;
-
-    if (!s?.whatsapp_number) {
-      Utils.showToast("WhatsApp Notice", "Student does not have a registered WhatsApp number.", "warning");
-      return;
-    }
-
     const orgName = inst?.institution_name || "EduTrack Tuition Centre";
+
     const msg = `Dear Parent,
 
 We have received your tuition fee payment.
 
-Student: ${s.name}
-Amount Received: ₹${r.amount_paid.toLocaleString('en-IN')}
+Student: ${s?.name || 'Student'}
 Receipt Number: ${r.receipt_number}
-Pending Balance: ₹${r.remaining_balance.toLocaleString('en-IN')}
+Amount Received: ₹${(r.amount_paid || 0).toLocaleString('en-IN')}
+Pending Balance: ₹${(r.remaining_balance || 0).toLocaleString('en-IN')}
 
 Thank you.
 
 Regards,
 ${orgName}`;
 
-    // Prompt admin about attaching downloaded PDF
-    const downloadFirst = confirm(
-      `WhatsApp will now open for ${s.name} (${s.whatsapp_number}).\n\n` +
-      `Important Notice:\nClick-to-chat cannot automatically attach a PDF.\n\n` +
-      `Click OK to download the PDF receipt first so you can attach it in WhatsApp.`
-    );
-
-    if (downloadFirst) {
-      ReceiptsModule.downloadPDF();
+    // 1. Generate the actual PDF and File object
+    let pdfData = null;
+    try {
+      pdfData = ReceiptsModule.createReceiptPDF(r);
+    } catch (e) {
+      console.warn("PDF creation warning:", e);
     }
 
-    const waUrl = Utils.buildWhatsAppUrl(s.whatsapp_number, msg);
-    window.open(waUrl, '_blank');
+    // 2. Mobile implementation: Check Web Share API support with files
+    const canShareFiles = pdfData && pdfData.file && typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfData.file] });
+
+    if (canShareFiles && navigator.share) {
+      try {
+        await navigator.share({
+          files: [pdfData.file],
+          title: `Receipt - ${s?.name || ''} (${r.receipt_number})`,
+          text: msg
+        });
+        // Note: Sharing sheet opened; do not falsely claim delivery occurred
+        Utils.showToast("Sharing Sheet Opened", "Select WhatsApp and choose parent contact to send.", "info");
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          // User dismissed or cancelled the native sharing menu
+          return;
+        }
+        console.warn("Native file sharing failed, switching to desktop fallback:", err);
+      }
+    }
+
+    // 3. Desktop Fallback (or unsupported file-share devices):
+    ReceiptsModule.fallbackDesktopShare(r, s, msg, pdfData);
+  },
+
+  // Fallback for Desktop & Browsers where navigator.canShare({files}) is unsupported
+  fallbackDesktopShare: (r, s, msg, pdfData) => {
+    // 1. Download PDF to user's device
+    if (pdfData && pdfData.doc) {
+      try {
+        pdfData.doc.save(pdfData.filename);
+      } catch (_) {}
+    }
+
+    // 2. Open parent's WhatsApp chat with pre-filled message
+    if (s?.whatsapp_number) {
+      const waUrl = Utils.buildWhatsAppUrl(s.whatsapp_number, msg);
+      window.open(waUrl, '_blank');
+      Utils.showToast("WhatsApp Opened", "PDF receipt downloaded. Attach it to your WhatsApp conversation and send.", "info", 6500);
+    } else {
+      Utils.showToast("Receipt Downloaded", "PDF receipt downloaded. No WhatsApp phone number recorded for student.", "warning");
+    }
   }
 };
 

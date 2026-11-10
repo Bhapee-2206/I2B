@@ -202,6 +202,9 @@ const StudentsModule = {
               <button class="btn btn-secondary btn-sm" onclick="StudentsModule.viewProfile('${s.id}')" title="View Profile">
                 <i data-lucide="user" style="width: 14px; height: 14px;"></i> View
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.editCurrentStudent('${s.id}')" title="Edit Student">
+                <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit
+              </button>
               <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
                 <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
               </button>
@@ -253,6 +256,9 @@ const StudentsModule = {
             <div class="student-card-actions">
               <button class="btn btn-secondary btn-sm" onclick="StudentsModule.viewProfile('${s.id}')">
                 <i data-lucide="user" style="width: 14px; height: 14px;"></i> Profile
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.editCurrentStudent('${s.id}')">
+                <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit
               </button>
               <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
                 <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
@@ -353,11 +359,11 @@ const StudentsModule = {
 
       const targetClass = initialGrade ? FeesModule.normalizeSubjectClass(initialGrade) : (classSelect.value || '5th');
       classSelect.innerHTML = `<option value="">Select School Class</option>` + 
-        FeesModule.SUBJECT_CLASSES.map(c => `
-          <option value="${c}" ${targetClass === c ? 'selected' : ''}>
-            ${c}${c.endsWith('Standard') || c === 'LKG' || c === 'UKG' ? '' : ' Standard'}
-          </option>
-        `).join('');
+        FeesModule.SUBJECT_CLASSES.map(c => {
+          const code = typeof c === 'object' ? c.code : c;
+          const name = typeof c === 'object' ? c.name : c;
+          return `<option value="${code}" ${targetClass === code ? 'selected' : ''}>${name}</option>`;
+        }).join('');
 
       let targetBoard = initialBoard || boardSelect.value || 'Matric';
       if (targetBoard.toUpperCase() !== 'CBSE' && targetBoard.toUpperCase() !== 'MATRIC') {
@@ -992,33 +998,63 @@ const StudentsModule = {
     Utils.renderIcons();
   },
 
-  // Edit Student from Profile
-  editCurrentStudent: () => {
-    const student = AppState.students.find(s => s.id === StudentsModule.currentProfileStudentId);
-    if (!student) return;
+  // Edit Student from Profile or Directory
+  editCurrentStudent: async (studentId = null) => {
+    const id = studentId || StudentsModule.currentProfileStudentId;
+    if (!id) {
+      Utils.showToast("Notice", "Please select a student to edit", "info");
+      return;
+    }
+
+    let student = (AppState.students || []).find(s => s.id === id);
+    if ((!student || !student.enrollments) && supabaseClient) {
+      try {
+        const { data } = await supabaseClient
+          .from('students')
+          .select(`*, enrollments (*, programmes (*))`)
+          .eq('id', id)
+          .single();
+        if (data) student = data;
+      } catch (_) {}
+    }
+
+    if (!student) {
+      Utils.showToast("Error", "Student record not found", "error");
+      return;
+    }
 
     document.getElementById('student-form-id').value = student.id;
     document.getElementById('student-code-preview').textContent = student.student_id;
-    document.getElementById('student-name-input').value = student.name;
+    document.getElementById('student-name-input').value = student.name || '';
     document.getElementById('student-parent-input').value = student.parent_name || '';
     document.getElementById('student-phone-input').value = student.whatsapp_number || '';
     document.getElementById('student-alt-phone-input').value = student.alt_phone || '';
     document.getElementById('student-address-input').value = student.address || '';
     document.getElementById('student-notes-input').value = student.notes || '';
-    document.getElementById('student-status-select').value = student.status;
+    document.getElementById('student-status-select').value = student.status || 'active';
     document.getElementById('student-joining-date-input').value = student.admission_date || '';
 
-    // Populate all existing programmes
+    // Populate active enrolments (or first default row if none)
     const container = document.getElementById('programme-rows-container');
     container.innerHTML = '';
-    (student.enrollments || []).forEach(e => {
-      StudentsModule.addProgrammeRow(e);
-    });
+    StudentsModule.activeProgrammeRowCount = 0;
+
+    const activeEnrolments = (student.enrollments || []).filter(e => e.status === 'active');
+    if (activeEnrolments.length > 0) {
+      activeEnrolments.forEach(e => {
+        StudentsModule.addProgrammeRow(e);
+      });
+    } else {
+      StudentsModule.addProgrammeRow();
+    }
+
+    StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Edit Student Profile & Enrolments';
     const modalDelBtn = document.getElementById('btn-modal-delete-student');
     if (modalDelBtn) modalDelBtn.style.display = 'inline-flex';
     Utils.openModal('modal-add-student');
+    Utils.renderIcons();
   },
 
   // Delete student initiated from the Edit Student modal
