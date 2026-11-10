@@ -141,8 +141,22 @@ const ReceiptsModule = {
   },
 
   // View Receipt Modal
-  viewReceipt: (receiptId) => {
-    const r = AppState.receipts.find(item => item.id === receiptId);
+  viewReceipt: async (receiptId, isNewPayment = false) => {
+    let r = (AppState.receipts || []).find(item => item.id === receiptId);
+    if (!r) {
+      await ReceiptsModule.loadReceipts();
+      r = (AppState.receipts || []).find(item => item.id === receiptId);
+    }
+    if (!r && supabaseClient) {
+      try {
+        const { data } = await supabaseClient
+          .from('receipts')
+          .select(`*, students (*), payments (*, payment_allocations (*, invoices (*)))`)
+          .eq('id', receiptId)
+          .single();
+        r = data;
+      } catch (_) {}
+    }
     if (!r) return;
 
     ReceiptsModule.currentReceipt = r;
@@ -166,7 +180,13 @@ const ReceiptsModule = {
     document.getElementById('receipt-institution-address').textContent = inst?.address || '';
     document.getElementById('receipt-footer-text').textContent = inst?.receipt_footer || 'Thank you for your payment!';
 
+    const banner = document.getElementById('receipt-success-banner');
+    if (banner) {
+      banner.style.display = isNewPayment ? 'flex' : 'none';
+    }
+
     Utils.openModal('modal-view-receipt');
+    Utils.renderIcons();
   },
 
   // Download PDF using jsPDF

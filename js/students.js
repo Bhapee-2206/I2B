@@ -975,7 +975,13 @@ const StudentsModule = {
                   <button class="btn btn-secondary btn-sm" onclick="ReceiptsModule.viewReceipt('${r.id}')">
                     <i data-lucide="file-text" style="width: 14px; height: 14px;"></i> Receipt
                   </button>
+                  <button class="btn btn-success btn-sm" onclick="ReceiptsModule.shareViaWhatsApp('${r.id}')" title="Share via WhatsApp">
+                    <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+                  </button>
                 ` : ''}
+                <button class="btn btn-secondary btn-sm" onclick="PaymentsModule.reversePayment('${p.id}')" title="Reverse Payment" style="color: var(--status-unpaid); margin-left: 4px;">
+                  <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Reverse
+                </button>
               </td>
             </tr>
           `;

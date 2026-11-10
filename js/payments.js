@@ -104,6 +104,9 @@ const PaymentsModule = {
                   <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
                 </button>
               ` : ''}
+              <button class="btn btn-secondary btn-sm" onclick="PaymentsModule.reversePayment('${p.id}')" title="Reverse Payment" style="color: var(--status-unpaid); padding: 0.25rem 0.45rem;">
+                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Reverse
+              </button>
             </td>
           </tr>
         `;
@@ -131,16 +134,19 @@ const PaymentsModule = {
               <span>Receipt: <strong>${receipt ? Utils.escapeHtml(receipt.receipt_number) : '—'}</strong></span>
             </div>
 
-            ${receipt ? `
-              <div class="student-card-actions">
+            <div class="student-card-actions">
+              ${receipt ? `
                 <button class="btn btn-secondary btn-sm" onclick="ReceiptsModule.viewReceipt('${receipt.id}')">
                   <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Receipt
                 </button>
                 <button class="btn btn-success btn-sm" onclick="ReceiptsModule.shareViaWhatsApp('${receipt.id}')">
                   <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
                 </button>
-              </div>
-            ` : ''}
+              ` : ''}
+              <button class="btn btn-secondary btn-sm" onclick="PaymentsModule.reversePayment('${p.id}')" style="color: var(--status-unpaid);">
+                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Reverse
+              </button>
+            </div>
           </div>
         `;
       }).join('');
@@ -407,12 +413,13 @@ const PaymentsModule = {
       await PaymentsModule.loadPayments();
       await StudentsModule.loadStudents();
       await MonthlyFeesModule.loadInvoices();
+      await ReceiptsModule.loadReceipts();
 
       PaymentsModule.renderPaymentsTable();
 
-      // Immediately display receipt
+      // Immediately display receipt with one-click WhatsApp action
       if (receiptId) {
-        ReceiptsModule.viewReceipt(receiptId);
+        ReceiptsModule.viewReceipt(receiptId, true);
       }
 
     } catch (err) {
@@ -424,6 +431,121 @@ const PaymentsModule = {
         submitBtn.disabled = false;
         submitBtn.textContent = "Confirm Payment & Issue Receipt";
       }
+    }
+  },
+
+  // Reverse / Void an accidental or incorrect payment
+  reversePayment: async (paymentId) => {
+    if (!paymentId) return;
+    const payment = (AppState.payments || []).find(p => p.id === paymentId);
+    const pmtNum = payment ? payment.payment_number : 'this payment';
+    const pmtAmount = payment ? Utils.formatCurrency(payment.amount) : '';
+    const studentName = payment?.students?.name || 'the student';
+
+    const confirmMsg = `Are you sure you want to REVERSE payment ${pmtNum} (${pmtAmount}) for ${studentName}?\n\n` +
+      `This will void the payment, delete the issued receipt, and restore the unpaid balance on the student's account.\n` +
+      `Use this if the payment was recorded by mistake.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      // 1. Fetch allocations for this payment
+      const { data: allocations, error: allocErr } = await supabaseClient
+        .from('payment_allocations')
+        .select('*')
+        .eq('payment_id', paymentId);
+
+      if (allocErr) throw allocErr;
+
+      // 2. Restore invoice paid_amount and status for each allocation
+      for (const alloc of (allocations || [])) {
+        if (!alloc.invoice_id) continue;
+
+        const { data: invData } = await supabaseClient
+          .from('invoices')
+          .select('*')
+          .eq('id', alloc.invoice_id)
+          .single();
+
+        if (invData) {
+          const currentPaid = parseFloat(invData.paid_amount) || 0;
+          const allocAmount = parseFloat(alloc.allocated_amount) || 0;
+          const restoredPaid = Math.max(0, currentPaid - allocAmount);
+          const totalAmount = parseFloat(invData.total_amount) || 0;
+          const restoredStatus = restoredPaid <= 0 ? 'unpaid' : (restoredPaid < totalAmount ? 'partially_paid' : 'paid');
+
+          // Note: PostgreSQL recalculates balance_amount automatically
+          await supabaseClient
+            .from('invoices')
+            .update({
+              paid_amount: restoredPaid,
+              status: restoredStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', alloc.invoice_id);
+        }
+      }
+
+      // 3. Delete receipts associated with this payment
+      await supabaseClient
+        .from('receipts')
+        .delete()
+        .eq('payment_id', paymentId);
+
+      // 4. Delete payment allocations
+      await supabaseClient
+        .from('payment_allocations')
+        .delete()
+        .eq('payment_id', paymentId);
+
+      // 5. Delete payment record
+      const { error: pmtDelErr } = await supabaseClient
+        .from('payments')
+        .delete()
+        .eq('id', paymentId);
+
+      if (pmtDelErr) throw pmtDelErr;
+
+      // 6. Audit log
+      try {
+        await AuthModule.logAudit('reverse_payment', 'payments', paymentId, {
+          payment_number: pmtNum,
+          amount: payment?.amount,
+          student_id: payment?.student_id
+        });
+      } catch (_) {}
+
+      Utils.closeModal('modal-view-receipt');
+      Utils.showToast("Payment Reversed", `Payment ${pmtNum} (${pmtAmount}) has been reversed. Invoice balance restored.`, "success");
+
+      // 7. Reload all data
+      await PaymentsModule.loadPayments();
+      await MonthlyFeesModule.loadInvoices();
+      await StudentsModule.loadStudents();
+      await ReceiptsModule.loadReceipts();
+
+      // 8. Re-render views
+      PaymentsModule.renderPaymentsTable();
+      ReceiptsModule.renderReceiptsTable();
+      MonthlyFeesModule.renderMonthlyFeesTable();
+
+      // If viewing student profile, re-render it
+      if (StudentsModule.currentProfileStudentId) {
+        await StudentsModule.viewProfile(StudentsModule.currentProfileStudentId);
+      }
+    } catch (err) {
+      console.error("Payment reversal error:", err);
+      Utils.showToast("Error", err.message || "Failed to reverse payment", "error");
+    }
+  },
+
+  reversePaymentFromReceiptModal: () => {
+    const r = ReceiptsModule.currentReceipt;
+    const pId = r?.payment_id || r?.payments?.id;
+    if (pId) {
+      PaymentsModule.reversePayment(pId);
+    } else {
+      Utils.showToast("Notice", "Payment record not found for this receipt", "warning");
     }
   }
 };
