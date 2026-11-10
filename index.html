@@ -578,15 +578,16 @@
              3.5 ATTENDANCE MANAGEMENT VIEW
              =================================================================== -->
         <section class="page-view" id="view-attendance">
+          <!-- Page Header -->
           <div class="attendance-page-header">
             <div>
-              <h1 class="attendance-page-title">Attendance</h1>
-              <p class="attendance-page-subtitle">Daily student attendance and attendance history.</p>
+              <h1 class="attendance-page-title">Daily Attendance</h1>
+              <p class="attendance-page-subtitle">Record today's student attendance.</p>
             </div>
           </div>
 
-          <!-- Attendance Section Navigation Tabs -->
-          <div class="attendance-tabs-nav">
+          <!-- Section Navigation Tabs -->
+          <div class="attendance-nav-tabs">
             <button type="button" class="attendance-tab-btn active" data-tab="register">
               <i data-lucide="calendar-check" style="width: 15px; height: 15px;"></i> Daily Register
             </button>
@@ -600,60 +601,64 @@
 
           <!-- SECTION 1: DAILY REGISTER -->
           <div id="attendance-section-register">
-            <div class="card" style="margin-bottom: 1.25rem;">
-              <div class="attendance-control-toolbar">
-                <div class="attendance-filter-group">
-                  <div class="attendance-input-wrap">
-                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Date</label>
-                    <input type="date" id="attendance-date-input" class="form-control" style="width: auto; min-width: 150px; font-weight: 600;" onchange="AttendanceModule.onDateChange(this.value)">
+            <!-- Compact Attendance Date & Programme Card -->
+            <div class="attendance-top-card">
+              <!-- Row 1: Date Bar -->
+              <div class="attendance-date-bar">
+                <div class="attendance-date-nav">
+                  <button type="button" class="attendance-date-btn" onclick="AttendanceModule.changeDateStep(-1)" title="Previous Day">
+                    <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+                  </button>
+                  <div class="attendance-date-display-wrap" title="Tap to pick date">
+                    <span id="attendance-readable-date">Loading date...</span>
+                    <input type="date" id="attendance-date-input" onchange="AttendanceModule.onDateChange(this.value)">
                   </div>
-
-                  <div class="attendance-input-wrap">
-                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Programme</label>
-                    <select id="attendance-programme-select" class="form-control" style="width: auto; min-width: 170px; font-weight: 600;" onchange="AttendanceModule.onProgrammeChange(this.value)">
-                      <option value="">Loading programmes...</option>
-                    </select>
-                  </div>
-
-                  <div class="attendance-input-wrap" style="flex: 1; min-width: 200px;">
-                    <label class="form-label" style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Search Student</label>
-                    <div style="position: relative;">
-                      <input type="text" id="attendance-search-input" class="form-control" placeholder="Search by name or ID..." oninput="AttendanceModule.renderRoster()">
-                    </div>
-                  </div>
+                  <button type="button" class="attendance-date-btn" id="btn-attendance-next-day" onclick="AttendanceModule.changeDateStep(1)" title="Next Day">
+                    <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+                  </button>
                 </div>
+                <button type="button" class="attendance-today-chip" onclick="AttendanceModule.goToToday()">Today</button>
+              </div>
 
-                <div class="attendance-toolbar-actions">
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-all-present" onclick="AttendanceModule.markAllPresent()" title="Mark all students Present in form">
-                    <i data-lucide="check-check" style="width: 14px; height: 14px; color: var(--status-paid);"></i> Mark All Present
-                  </button>
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-no-class" onclick="AttendanceModule.markNoClass()" title="Record holiday or cancellation">
-                    <i data-lucide="calendar-off" style="width: 14px; height: 14px; color: var(--text-muted);"></i> Mark No Class
-                  </button>
+              <!-- Row 2: Programme Chips -->
+              <div class="attendance-programmes-wrap">
+                <div class="attendance-section-mini-label">Programmes:</div>
+                <div class="attendance-programme-chips" id="attendance-programme-chips">
+                  <!-- Dynamically populated chips -->
                 </div>
               </div>
 
-              <!-- Live Summary Strip -->
-              <div class="attendance-summary-strip">
-                <div class="attendance-summary-pill total">
-                  <span class="pill-label">Total</span>
-                  <span class="pill-count" id="att-summary-total">0</span>
+              <!-- Row 3: Compact Summary & Progress -->
+              <div class="attendance-summary-box">
+                <div class="attendance-summary-row">
+                  <div class="attendance-roster-count">
+                    <strong id="att-summary-total">0</strong> Students <span style="color: var(--text-muted); font-size: 0.8rem;">•</span> <span id="att-summary-progress-text">0 of 0 marked</span>
+                  </div>
+                  <div class="attendance-stat-badges">
+                    <span class="attendance-stat-badge present">P: <strong id="att-summary-present">0</strong></span>
+                    <span class="attendance-stat-badge absent">A: <strong id="att-summary-absent">0</strong></span>
+                    <span class="attendance-stat-badge leave">L: <strong id="att-summary-leave">0</strong></span>
+                    <span class="attendance-stat-badge unmarked">U: <strong id="att-summary-unmarked">0</strong></span>
+                  </div>
                 </div>
-                <div class="attendance-summary-pill present">
-                  <span class="pill-label">Present</span>
-                  <span class="pill-count" id="att-summary-present">0</span>
+                <div class="attendance-progress-track">
+                  <div class="attendance-progress-fill" id="att-progress-bar-fill" style="width: 0%;"></div>
                 </div>
-                <div class="attendance-summary-pill absent">
-                  <span class="pill-label">Absent</span>
-                  <span class="pill-count" id="att-summary-absent">0</span>
+              </div>
+
+              <!-- Row 4: Search & Actions Toolbar -->
+              <div class="attendance-toolbar">
+                <div class="attendance-search-box">
+                  <i data-lucide="search" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+                  <input type="text" id="attendance-search-input" placeholder="Search student name or ID..." oninput="AttendanceModule.onSearchInput(this.value)">
                 </div>
-                <div class="attendance-summary-pill leave">
-                  <span class="pill-label">Leave</span>
-                  <span class="pill-count" id="att-summary-leave">0</span>
-                </div>
-                <div class="attendance-summary-pill unmarked">
-                  <span class="pill-label">Unmarked</span>
-                  <span class="pill-count" id="att-summary-unmarked">0</span>
+                <div class="attendance-actions-wrap">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-all-present" onclick="AttendanceModule.handleMarkAllPresent()">
+                    <i data-lucide="check-check" style="width: 14px; height: 14px; color: var(--status-paid);"></i> Mark All Present
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-no-class" onclick="AttendanceModule.openNoClassModal()">
+                    <i data-lucide="calendar-off" style="width: 14px; height: 14px; color: var(--text-muted);"></i> No Class / Holiday
+                  </button>
                 </div>
               </div>
             </div>
@@ -666,7 +671,7 @@
 
             <!-- Active Student Attendance Register -->
             <div id="attendance-roster-container">
-              <!-- Desktop Table -->
+              <!-- Desktop Table (Hidden on Mobile) -->
               <div class="card attendance-desktop-roster">
                 <div class="table-responsive">
                   <table class="data-table">
@@ -681,21 +686,20 @@
                     </thead>
                     <tbody id="attendance-roster-tbody">
                       <tr>
-                        <td colspan="5" class="text-center text-muted" style="padding: 2.5rem 1rem;">Loading student roster...</td>
+                        <td colspan="5" class="text-center text-muted" style="padding: 2rem;">Loading student roster...</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              <!-- Mobile Student Cards -->
+              <!-- Mobile Student Cards (Visible on Mobile) -->
               <div id="attendance-mobile-cards" class="attendance-mobile-cards"></div>
 
               <!-- Sticky Save Action Footer Bar -->
-              <div class="attendance-save-bar">
-                <div class="attendance-save-info">
-                  <i data-lucide="info" style="width: 14px; height: 14px; color: var(--accent-blue);"></i>
-                  <span>Ensure all students are marked before submitting.</span>
+              <div class="attendance-sticky-save-bar" id="attendance-sticky-save-bar">
+                <div class="attendance-save-status">
+                  <span id="attendance-save-status-text">0 of 0 marked</span>
                 </div>
                 <button type="button" class="btn btn-primary" id="btn-save-attendance" onclick="AttendanceModule.saveAttendance()">
                   <i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Attendance
@@ -719,7 +723,26 @@
                 </div>
               </div>
 
-              <div class="table-responsive">
+              <!-- History Filters -->
+              <div style="background: var(--surface-subtle); padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-light); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label class="form-label" style="margin: 0; font-size: 0.75rem;">From:</label>
+                  <input type="date" id="history-filter-from" class="form-control" style="width: auto; font-size: 0.8rem; padding: 0.3rem 0.5rem;" onchange="AttendanceModule.loadHistory()">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label class="form-label" style="margin: 0; font-size: 0.75rem;">To:</label>
+                  <input type="date" id="history-filter-to" class="form-control" style="width: auto; font-size: 0.8rem; padding: 0.3rem 0.5rem;" onchange="AttendanceModule.loadHistory()">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label class="form-label" style="margin: 0; font-size: 0.75rem;">Programme:</label>
+                  <select id="history-filter-programme" class="form-control" style="width: auto; font-size: 0.8rem; padding: 0.3rem 0.5rem;" onchange="AttendanceModule.loadHistory()">
+                    <option value="">All Programmes</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Desktop Table for History -->
+              <div class="table-responsive attendance-history-table-wrap">
                 <table class="data-table">
                   <thead>
                     <tr>
@@ -740,6 +763,9 @@
                   </tbody>
                 </table>
               </div>
+
+              <!-- Mobile Cards for History -->
+              <div id="attendance-history-mobile-cards" class="attendance-history-mobile-cards" style="padding: 0.75rem;"></div>
             </div>
           </div>
 
@@ -771,12 +797,29 @@
                   <div class="card-subtitle">Calculated attendance rate (leaves & cancelled sessions excluded from denominator)</div>
                 </div>
                 <div class="card-actions">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.exportToCSV()">
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i> Export CSV
+                  </button>
                   <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.exportToExcel()">
-                    <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: #16a34a;"></i> Export to Excel
+                    <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; color: #16a34a;"></i> Export Excel
                   </button>
                   <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.loadReports()">
                     <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i> Refresh
                   </button>
+                </div>
+              </div>
+
+              <!-- Reports Filter Bar -->
+              <div style="background: var(--surface-subtle); padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-light); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label class="form-label" style="margin: 0; font-size: 0.75rem;">Programme:</label>
+                  <select id="reports-filter-programme" class="form-control" style="width: auto; font-size: 0.8rem; padding: 0.3rem 0.5rem;" onchange="AttendanceModule.loadReports()">
+                    <option value="">All Programmes</option>
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label class="form-label" style="margin: 0; font-size: 0.75rem;">Search:</label>
+                  <input type="text" id="reports-filter-search" class="form-control" placeholder="Filter student..." style="width: 160px; font-size: 0.8rem; padding: 0.3rem 0.5rem;" oninput="AttendanceModule.filterReportsTable()">
                 </div>
               </div>
 
@@ -2279,6 +2322,63 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ATTENDANCE NO CLASS / HOLIDAY MODAL -->
+  <div class="modal-overlay" id="modal-attendance-no-class">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Mark No Class / Holiday</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">Record holiday or cancellation for scheduled class</div>
+        </div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-attendance-no-class')">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+
+      <form onsubmit="AttendanceModule.confirmNoClass(event)">
+        <div class="modal-body">
+          <div style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.85rem; border: 1px solid var(--border-light);">
+            <div style="margin-bottom: 0.25rem;">Programme: <strong id="no-class-modal-prog-name">—</strong></div>
+            <div>Date: <strong id="no-class-modal-date-display">—</strong></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">Cancellation Reason <span class="required">*</span></label>
+            <select id="no-class-reason-select" class="form-control" onchange="AttendanceModule.onNoClassReasonChange(this.value)" required>
+              <option value="Public Holiday">Public Holiday</option>
+              <option value="Institution Holiday">Institution Holiday</option>
+              <option value="Teacher Unavailable">Teacher Unavailable</option>
+              <option value="Heavy Rain / Weather">Heavy Rain / Weather</option>
+              <option value="Class Cancelled">Class Cancelled</option>
+              <option value="Other">Other Reason (Custom)</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="no-class-custom-reason-wrap" style="display: none; margin-bottom: 1rem;">
+            <label class="form-label">Specify Custom Reason <span class="required">*</span></label>
+            <input type="text" id="no-class-custom-reason-input" class="form-control" placeholder="Enter reason...">
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.75rem; font-size: 0.78rem; color: var(--text-muted); line-height: 1.45;">
+            <div>• Students are <strong>not marked absent</strong>.</div>
+            <div>• Cancelled sessions are <strong>excluded</strong> from student attendance percentages.</div>
+          </div>
+
+          <div id="no-class-overwrite-warning" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: 0.75rem; font-size: 0.78rem; color: #92400e; margin-top: 0.75rem; line-height: 1.45;">
+            ⚠️ <strong>Warning:</strong> A completed attendance register already exists for this date. Marking No Class will supersede the existing records.
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-attendance-no-class')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-confirm-no-class" style="background: #ef4444; border-color: #ef4444;">
+            <i data-lucide="calendar-off" style="width: 14px; height: 14px;"></i> Confirm No Class
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
