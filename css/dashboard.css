@@ -1,0 +1,206 @@
+/* ==========================================================================
+   EDUTRACK DASHBOARD STYLES
+   Metrics Cards, Analytical Charts, Feeds & Quick Actions
+   ========================================================================== */
+
+/* Top Action Bar */
+.dashboard-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.dashboard-welcome h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dashboard-welcome p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.quick-action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+/* Metric Cards Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.stat-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.stat-card-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.stat-card-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.stat-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-icon-wrap.primary {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.stat-icon-wrap.success {
+  background-color: var(--success-light);
+  color: var(--success);
+}
+
+.stat-icon-wrap.warning {
+  background-color: var(--warning-light);
+  color: var(--warning);
+}
+
+.stat-icon-wrap.danger {
+  background-color: var(--danger-light);
+  color: var(--danger);
+}
+
+.stat-icon-wrap.accent {
+  background-color: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Charts Grid */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 260px;
+  width: 100%;
+}
+
+/* Recent Activity Grid */
+.dashboard-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.5rem;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  background-color: #f8fafc;
+  border: 1px solid var(--border-color);
+}
+
+.activity-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.activity-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background-color: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.activity-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.activity-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.activity-amount {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--success);
+}

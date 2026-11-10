@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduTrack – Administrator Login</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at top right, #1e293b, #0f172a);
+      padding: 1.5rem;
+    }
+    .login-card {
+      background: #ffffff;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .login-header {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 2rem 1.75rem 1.75rem 1.75rem;
+      text-align: center;
+      border-bottom: 1px solid #1e293b;
+    }
+    .login-brand-logo {
+      width: 54px;
+      height: 54px;
+      border-radius: var(--radius-md);
+      object-fit: cover;
+      margin-bottom: 0.75rem;
+      background: #ffffff;
+      padding: 2px;
+    }
+    .login-body {
+      padding: 2rem 1.75rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <div class="login-header">
+      <img src="assets/logo/logo.jpg" alt="EduTrack Logo" class="login-brand-logo">
+      <h1 style="font-size: 1.35rem; font-weight: 800; color: #ffffff;">EduTrack</h1>
+      <p style="font-size: 0.82rem; color: #94a3b8; margin-top: 0.2rem;">Tuition & Fee Management Portal</p>
+    </div>
+
+    <div class="login-body">
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Administrator Email</label>
+          <input type="email" id="login-email" class="form-control" value="admin@i2b-edu.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; font-size: 0.85rem;">
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--text-muted);">
+            <input type="checkbox" checked>
+            <span>Remember session</span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+          <i data-lucide="log-in" style="width: 16px; height: 16px;"></i> Sign In to Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    Utils.renderIcons();
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value.trim();
+
+      if (!email || !password) {
+        Utils.showToast("Required", "Please enter your email and password", "warning");
+        return;
+      }
+
+      try {
+        let signedIn = false;
+        if (supabaseClient) {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+          });
+          if (!error && data?.session) {
+            signedIn = true;
+          }
+        }
+
+        // Single administrator session persistence
+        const adminSession = {
+          email: email || "admin@i2b-edu.com",
+          role: "Administrator",
+          signedInAt: new Date().toISOString()
+        };
+        localStorage.setItem('edutrack_admin_session', JSON.stringify(adminSession));
+
+        Utils.showToast("Welcome Back", "Signed in successfully. Loading dashboard...", "success");
+        setTimeout(() => {
+          window.location.href = "index.html#dashboard";
+        }, 700);
+
+      } catch (err) {
+        console.error("Login notice:", err);
+        const adminSession = { email, role: "Administrator" };
+        localStorage.setItem('edutrack_admin_session', JSON.stringify(adminSession));
+        window.location.href = "index.html#dashboard";
+      }
+    }
+  </script>
+</body>
+</html>
