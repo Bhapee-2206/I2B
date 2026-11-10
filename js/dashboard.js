@@ -43,13 +43,17 @@ const DashboardModule = {
 
     if (currentInvoices.length > 0) {
       currentInvoices.forEach(inv => {
-        expectedFeesThisMonth += parseFloat(inv.total_amount) || 0;
-        collectedThisMonth += parseFloat(inv.paid_amount) || 0;
-        outstandingThisMonth += parseFloat(inv.balance_amount) || 0;
+        const total = parseFloat(inv.total_amount) || 0;
+        const paid = parseFloat(inv.paid_amount) || 0;
+        const bal = inv.status === 'paid' ? 0 : Math.max(0, total - paid);
 
-        if (inv.status === 'paid' || parseFloat(inv.balance_amount) <= 0) {
+        expectedFeesThisMonth += total;
+        collectedThisMonth += paid;
+        outstandingThisMonth += bal;
+
+        if (inv.status === 'paid' || bal <= 0) {
           fullyPaidCount++;
-        } else if (parseFloat(inv.paid_amount) > 0) {
+        } else if (paid > 0) {
           partiallyPaidCount++;
         } else {
           unpaidCount++;
@@ -64,11 +68,24 @@ const DashboardModule = {
       // Payments actually collected in this calendar month
       const thisMonthPayments = (AppState.payments || []).filter(p => {
         const pd = new Date(p.payment_date);
-        return pd.getMonth() + 1 === curMonth && pd.getFullYear() === curYear;
+        return pd.getMonth() + 1 === curMonth && pd.getFullYear() === curYear && p.status !== 'cancelled' && p.status !== 'reversed';
       });
       collectedThisMonth = thisMonthPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
       outstandingThisMonth = Math.max(0, expectedFeesThisMonth - collectedThisMonth);
-      unpaidCount = activeStudents.length;
+
+      activeStudents.forEach(s => {
+        const bal = StudentsModule.calculateOutstandingBalance(s);
+        if (bal <= 0) {
+          fullyPaidCount++;
+        } else {
+          const paid = (s.payments || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+          if (paid > 0) {
+            partiallyPaidCount++;
+          } else {
+            unpaidCount++;
+          }
+        }
+      });
     }
 
     // 1. Primary 4 Metric Cards

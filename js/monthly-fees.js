@@ -52,7 +52,12 @@ const MonthlyFeesModule = {
     // Calculations
     const expected = list.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0);
     const collected = list.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
-    const pending = list.reduce((sum, inv) => sum + (parseFloat(inv.balance_amount) || 0), 0);
+    const pending = list.reduce((sum, inv) => {
+      if (inv.status === 'paid') return sum;
+      const t = parseFloat(inv.total_amount) || 0;
+      const p = parseFloat(inv.paid_amount) || 0;
+      return sum + Math.max(0, t - p);
+    }, 0);
 
     const expEl = document.getElementById('month-summary-expected');
     const colEl = document.getElementById('month-summary-collected');
@@ -95,8 +100,8 @@ const MonthlyFeesModule = {
             <td><strong>${Utils.formatCurrency(inv.total_amount)}</strong></td>
             <td><span style="color: var(--status-paid); font-weight: 600;">${Utils.formatCurrency(inv.paid_amount)}</span></td>
             <td>
-              <strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">
-                ${Utils.formatCurrency(inv.balance_amount)}
+              <strong style="color: ${(inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0) ? 'var(--status-paid)' : 'var(--status-unpaid)'};">
+                ${Utils.formatCurrency(inv.status === 'paid' ? 0 : Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))}
               </strong>
             </td>
             <td>
@@ -106,7 +111,7 @@ const MonthlyFeesModule = {
               </span>
             </td>
             <td class="actions-cell">
-              ${inv.balance_amount > 0 ? `
+              ${(inv.status !== 'paid' && (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0) ? `
                 <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
                   <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
                 </button>
@@ -137,13 +142,13 @@ const MonthlyFeesModule = {
 
             <div class="student-card-financials">
               <div>Total: <strong>${Utils.formatCurrency(inv.total_amount)}</strong></div>
-              <div>Pending: <strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(inv.balance_amount)}</strong></div>
+              <div>Pending: <strong style="color: ${(inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0) ? 'var(--status-paid)' : 'var(--status-unpaid)'};">${Utils.formatCurrency(inv.status === 'paid' ? 0 : Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))}</strong></div>
             </div>
 
-            ${inv.balance_amount > 0 ? `
+            ${(inv.status !== 'paid' && (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0) ? `
               <div class="student-card-actions">
                 <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
-                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Due (₹${inv.balance_amount})
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Due (${Utils.formatCurrency(Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))})
                 </button>
               </div>
             ` : ''}

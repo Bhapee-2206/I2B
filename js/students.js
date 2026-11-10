@@ -63,39 +63,46 @@ const StudentsModule = {
       .reduce((sum, e) => sum + (parseFloat(e.agreed_fee) || 0), 0);
   },
 
-  // Calculate outstanding balance across all invoices
+  // Calculate outstanding balance across all invoices and payments
   calculateOutstandingBalance: (student) => {
     if (!student) return 0;
-    if (!student.invoices || student.invoices.length === 0) {
-      return StudentsModule.calculateMonthlyFee(student);
+    const activeInvoices = (student.invoices || []).filter(inv => inv.status !== 'cancelled');
+    
+    if (activeInvoices.length > 0) {
+      return activeInvoices.reduce((sum, inv) => {
+        if (inv.status === 'paid') return sum;
+        const total = parseFloat(inv.total_amount) || 0;
+        const paid = parseFloat(inv.paid_amount) || 0;
+        const bal = (inv.balance_amount !== undefined && inv.balance_amount !== null)
+          ? parseFloat(inv.balance_amount)
+          : Math.max(0, total - paid);
+        return sum + Math.max(0, Math.min(bal, total - paid));
+      }, 0);
     }
-    return student.invoices
-      .filter(inv => inv.status !== 'cancelled')
-      .reduce((sum, inv) => sum + (parseFloat(inv.balance_amount) || 0), 0);
+
+    // If student has no invoices in DB yet, calculate from monthly fee minus total completed payments
+    const monthlyFee = StudentsModule.calculateMonthlyFee(student);
+    const totalPaid = (student.payments || [])
+      .filter(p => p.status !== 'cancelled' && p.status !== 'reversed')
+      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    return Math.max(0, monthlyFee - totalPaid);
   },
 
   // Determine overall payment status
   getPaymentStatus: (student) => {
-    if (!student.invoices || student.invoices.length === 0) {
-      return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
-    }
-
-    const activeInvoices = student.invoices
-      .filter(inv => inv.status !== 'cancelled')
-      .sort((a, b) => (b.billing_year * 100 + b.billing_month) - (a.billing_year * 100 + a.billing_month));
-
-    if (activeInvoices.length === 0) {
-      return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
-    }
-
-    const latest = activeInvoices[0];
-    if (latest.status === 'paid' || parseFloat(latest.balance_amount) <= 0) {
+    if (!student) return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
+    const bal = StudentsModule.calculateOutstandingBalance(student);
+    if (bal <= 0) {
       return { status: 'paid', label: 'Paid', class: 'badge-paid' };
-    } else if (parseFloat(latest.paid_amount) > 0) {
-      return { status: 'partially_paid', label: 'Partial', class: 'badge-partial' };
-    } else {
-      return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
     }
+    const totalPaid = (student.payments || [])
+      .filter(p => p.status !== 'cancelled' && p.status !== 'reversed')
+      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0) +
+      (student.invoices || []).reduce((sum, i) => sum + (parseFloat(i.paid_amount) || 0), 0);
+    if (totalPaid > 0) {
+      return { status: 'partially_paid', label: 'Partial', class: 'badge-partial' };
+    }
+    return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
   },
 
   // Render Student Directory (Both Desktop Table & Mobile Cards)
@@ -313,8 +320,15 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Register New Student';
+    const statusBadge = document.getElementById('student-modal-status-badge');
+    if (statusBadge) statusBadge.innerHTML = '• Initial Status: <span class="badge badge-unpaid">UNPAID</span>';
+    const warningEl = document.getElementById('student-modal-warning');
+    if (warningEl) {
+      warningEl.style.display = 'block';
+      warningEl.innerHTML = '⚠️ <strong>Registration ≠ Payment:</strong> Saving creates student with initial status <strong>UNPAID</strong>. No payment is collected until recorded in Fee Collection.';
+    }
     const saveBtn = document.getElementById('btn-save-student-submit');
-    if (saveBtn) saveBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Student';
+    if (saveBtn) saveBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Register Student (Unpaid)';
     const modalDelBtn = document.getElementById('btn-modal-delete-student');
     if (modalDelBtn) modalDelBtn.style.display = 'none';
     Utils.openModal('modal-add-student');
@@ -819,6 +833,10 @@ const StudentsModule = {
       await StudentsModule.loadStudents();
       await MonthlyFeesModule.loadInvoices();
       StudentsModule.renderStudentsTable();
+      if (typeof DashboardModule !== 'undefined' && DashboardModule.updateMetrics) {
+        DashboardModule.updateMetrics();
+        DashboardModule.renderOutstandingStudentsList();
+      }
 
       if (studentId) {
         StudentsModule.viewProfile(studentId);
@@ -1054,6 +1072,13 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
 
     document.getElementById('student-modal-title').textContent = 'Edit Student Profile & Enrolments';
+    const statusInfo = StudentsModule.getPaymentStatus(student);
+    const statusBadge = document.getElementById('student-modal-status-badge');
+    if (statusBadge) statusBadge.innerHTML = `• Status: <span class="badge ${statusInfo.class}">${statusInfo.label}</span>`;
+    const warningEl = document.getElementById('student-modal-warning');
+    if (warningEl) {
+      warningEl.innerHTML = 'ℹ️ <strong>Note:</strong> Changes to programme fees apply to future billing. Payments must be recorded in Fee Collection.';
+    }
     const saveBtn = document.getElementById('btn-save-student-submit');
     if (saveBtn) saveBtn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i> Update Student';
     const modalDelBtn = document.getElementById('btn-modal-delete-student');

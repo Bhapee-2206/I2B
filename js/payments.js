@@ -197,22 +197,35 @@ const PaymentsModule = {
     }
 
     const pendingInvoices = (student.invoices || [])
-      .filter(inv => inv.status !== 'cancelled' && (parseFloat(inv.balance_amount) > 0 || inv.status === 'unpaid'))
+      .filter(inv => inv.status !== 'cancelled' && (
+        inv.status === 'unpaid' ||
+        inv.status === 'partially_paid' ||
+        (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0
+      ))
       .sort((a, b) => (a.billing_year * 100 + a.billing_month) - (b.billing_year * 100 + b.billing_month));
 
     PaymentsModule.currentStudentPendingInvoices = pendingInvoices;
 
     if (pendingInvoices.length === 0) {
+      const outstandingDue = StudentsModule.calculateOutstandingBalance(student);
       const monthlyFee = StudentsModule.calculateMonthlyFee(student);
+      const feeToCollect = outstandingDue > 0 ? outstandingDue : monthlyFee;
+
       container.innerHTML = `
         <div style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--border-light);">
-          <div style="color: var(--text-muted);">No open monthly invoices found for <strong>${Utils.escapeHtml(student.name)}</strong>.</div>
-          <div style="margin-top: 0.35rem; color: var(--accent-blue); font-weight: 600;">
-            Applicable Monthly Fee: ${Utils.formatCurrency(monthlyFee)}
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--text-muted);">Current Billing Cycle:</span>
+            <span class="badge ${feeToCollect > 0 ? 'badge-unpaid' : 'badge-paid'}">${feeToCollect > 0 ? 'Pending Fee' : 'Settled'}</span>
+          </div>
+          <div style="margin-top: 0.45rem; color: var(--accent-blue); font-weight: 700; font-size: 1.05rem;">
+            Tuition Fee: ${Utils.formatCurrency(feeToCollect)}
+          </div>
+          <div style="margin-top: 0.25rem; font-size: 0.74rem; color: var(--text-muted);">
+            Payment will automatically settle this cycle and generate an official computer-verified receipt.
           </div>
         </div>
       `;
-      document.getElementById('payment-amount-input').value = monthlyFee;
+      document.getElementById('payment-amount-input').value = feeToCollect;
       return;
     }
 
@@ -221,15 +234,24 @@ const PaymentsModule = {
         Select Invoices to Settle (${pendingInvoices.length} outstanding):
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.45rem;">
-        ${pendingInvoices.map(inv => `
+        ${pendingInvoices.map(inv => {
+          const tot = parseFloat(inv.total_amount) || 0;
+          const pd = parseFloat(inv.paid_amount) || 0;
+          const bal = (inv.balance_amount !== undefined && inv.balance_amount !== null)
+            ? parseFloat(inv.balance_amount)
+            : Math.max(0, tot - pd);
+          const currentDue = inv.status === 'paid' ? 0 : Math.max(0, Math.min(bal, tot - pd));
+
+          return `
           <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.85rem; cursor: pointer;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <input type="checkbox" class="payment-inv-checkbox" value="${inv.id}" data-balance="${inv.balance_amount}" ${preselectedInvoiceId === inv.id || !preselectedInvoiceId ? 'checked' : ''} onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
+              <input type="checkbox" class="payment-inv-checkbox" value="${inv.id}" data-balance="${currentDue}" ${preselectedInvoiceId === inv.id || !preselectedInvoiceId ? 'checked' : ''} onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
               <span><strong>${Utils.escapeHtml(inv.invoice_number)}</strong> (${Utils.formatMonthYear(inv.billing_month, inv.billing_year)})</span>
             </div>
-            <span style="font-weight: 700; color: var(--status-unpaid);">${Utils.formatCurrency(inv.balance_amount)}</span>
+            <span style="font-weight: 700; color: ${currentDue > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(currentDue)}</span>
           </label>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     `;
 
@@ -268,13 +290,23 @@ const PaymentsModule = {
     }
 
     const student = AppState.students.find(s => s.id === studentId);
-    const pendingInvoices = PaymentsModule.currentStudentPendingInvoices.length > 0
-      ? PaymentsModule.currentStudentPendingInvoices
-      : (student?.invoices || []).filter(inv => parseFloat(inv.balance_amount) > 0);
-
-    const totalOutstanding = pendingInvoices.reduce((sum, inv) => sum + (parseFloat(inv.balance_amount) || 0), 0);
+    let pendingInvoices = (PaymentsModule.currentStudentPendingInvoices && PaymentsModule.currentStudentPendingInvoices.length > 0)
+      ? [...PaymentsModule.currentStudentPendingInvoices]
+      : (student?.invoices || [])
+          .filter(inv => inv.status !== 'cancelled' && (
+            inv.status === 'unpaid' ||
+            inv.status === 'partially_paid' ||
+            (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0
+          ))
+          .sort((a, b) => (a.billing_year * 100 + a.billing_month) - (b.billing_year * 100 + b.billing_month));
 
     // Over-allocation check
+    const totalOutstanding = pendingInvoices.reduce((sum, inv) => {
+      const tot = parseFloat(inv.total_amount) || 0;
+      const pd = parseFloat(inv.paid_amount) || 0;
+      return sum + Math.max(0, tot - pd);
+    }, 0);
+
     if (totalOutstanding > 0 && amount > totalOutstanding) {
       const proceed = confirm(
         `Amount received (₹${amount}) exceeds total selected outstanding dues (₹${totalOutstanding}).\n\n` +
@@ -291,45 +323,115 @@ const PaymentsModule = {
     }
 
     try {
+      // 1. Auto-create monthly invoice if student has no open invoices in DB yet
+      if (pendingInvoices.length === 0 && supabaseClient) {
+        const now = new Date();
+        const pDate = payment_date ? new Date(payment_date) : now;
+        const curMonth = pDate.getMonth() + 1;
+        const curYear = pDate.getFullYear();
+        const monthlyFee = StudentsModule.calculateMonthlyFee(student);
+        const invTotal = Math.max(amount, monthlyFee);
+
+        let existingCycleInv = (student?.invoices || []).find(i => 
+          i.billing_month === curMonth && i.billing_year === curYear && i.status !== 'cancelled'
+        );
+
+        if (!existingCycleInv) {
+          const invNumber = Utils.getNextInvoiceNumber(student.student_id, curMonth, curYear);
+          const defaultDueDay = AppState.institution?.default_due_day || 10;
+          const dueDate = `${curYear}-${String(curMonth).padStart(2, '0')}-${String(Math.min(defaultDueDay, 28)).padStart(2, '0')}`;
+
+          try {
+            const { data: newInv, error: invErr } = await supabaseClient
+              .from('invoices')
+              .insert([{
+                invoice_number: invNumber,
+                student_id: studentId,
+                billing_month: curMonth,
+                billing_year: curYear,
+                invoice_date: payment_date || now.toISOString().slice(0, 10),
+                due_date: dueDate,
+                total_amount: invTotal,
+                paid_amount: 0,
+                balance_amount: invTotal,
+                status: 'unpaid',
+                notes: `Tuition fee invoice for ${Utils.formatMonthYear(curMonth, curYear)}`
+              }])
+              .select();
+
+            if (!invErr && newInv && newInv[0]) {
+              existingCycleInv = newInv[0];
+              const activeEnrollments = (student.enrollments || []).filter(e => e.status === 'active');
+              if (activeEnrollments.length > 0) {
+                const items = activeEnrollments.map(e => ({
+                  invoice_id: existingCycleInv.id,
+                  enrollment_id: e.id,
+                  programme_id: e.programme_id,
+                  class_or_grade: e.class_or_grade,
+                  description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade})`,
+                  amount: e.agreed_fee
+                }));
+                try { await supabaseClient.from('invoice_items').insert(items); } catch (_) {}
+              }
+              pendingInvoices.push(existingCycleInv);
+            }
+          } catch (createErr) {
+            console.warn("Auto-invoice generation notice:", createErr);
+          }
+        } else {
+          pendingInvoices.push(existingCycleInv);
+        }
+      }
+
       // Build invoice allocations payload
       let remainingToAllocate = amount;
       const allocations = [];
 
       for (const inv of pendingInvoices) {
         if (remainingToAllocate <= 0) break;
-        const balance = parseFloat(inv.balance_amount) || 0;
-        const alloc = Math.min(balance, remainingToAllocate);
-        allocations.push({
-          invoice_id: inv.id,
-          amount: alloc
-        });
-        remainingToAllocate -= alloc;
+        const tot = parseFloat(inv.total_amount) || 0;
+        const pd = parseFloat(inv.paid_amount) || 0;
+        const bal = (inv.balance_amount !== undefined && inv.balance_amount !== null)
+          ? parseFloat(inv.balance_amount)
+          : Math.max(0, tot - pd);
+        const due = Math.max(0, Math.min(bal, tot - pd));
+        const alloc = due > 0 ? Math.min(due, remainingToAllocate) : remainingToAllocate;
+
+        if (alloc > 0) {
+          allocations.push({
+            invoice_id: inv.id,
+            amount: alloc
+          });
+          remainingToAllocate -= alloc;
+        }
       }
 
       let receiptId = null;
       let rpcSucceeded = false;
 
       // 1. Try atomic RPC first
-      try {
-        const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('record_payment_transaction', {
-          p_student_id: studentId,
-          p_payment_date: payment_date,
-          p_amount: amount,
-          p_payment_method: payment_method,
-          p_transaction_reference: transaction_reference,
-          p_notes: notes,
-          p_invoice_allocations: allocations
-        });
+      if (allocations.length > 0) {
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('record_payment_transaction', {
+            p_student_id: studentId,
+            p_payment_date: payment_date,
+            p_amount: amount,
+            p_payment_method: payment_method,
+            p_transaction_reference: transaction_reference,
+            p_notes: notes,
+            p_invoice_allocations: allocations
+          });
 
-        if (!rpcErr && rpcRes && rpcRes.success) {
-          rpcSucceeded = true;
-          receiptId = rpcRes.receipt_id;
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            rpcSucceeded = true;
+            receiptId = rpcRes.receipt_id;
+          }
+        } catch (rpcEx) {
+          rpcSucceeded = false;
         }
-      } catch (rpcEx) {
-        rpcSucceeded = false;
       }
 
-      // 2. Fallback to client transactional execution if RPC not yet created
+      // 2. Fallback to client transactional execution
       if (!rpcSucceeded) {
         const paymentNumber = `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -356,34 +458,52 @@ const PaymentsModule = {
         for (const alloc of allocations) {
           const inv = pendingInvoices.find(i => i.id === alloc.invoice_id);
           if (inv) {
-            const newPaid = (parseFloat(inv.paid_amount) || 0) + alloc.amount;
-            const newBalance = Math.max(0, (parseFloat(inv.total_amount) || 0) - newPaid);
+            const currentPaid = parseFloat(inv.paid_amount) || 0;
+            const newPaid = currentPaid + alloc.amount;
+            const total = parseFloat(inv.total_amount) || 0;
+            const newBalance = Math.max(0, total - newPaid);
             const newStatus = newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partially_paid' : 'unpaid');
 
-            await supabaseClient
-              .from('invoices')
-              .update({
-                paid_amount: newPaid,
-                balance_amount: newBalance,
-                status: newStatus,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', inv.id);
+            try {
+              await supabaseClient
+                .from('invoices')
+                .update({
+                  paid_amount: newPaid,
+                  balance_amount: newBalance,
+                  status: newStatus,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', inv.id);
+            } catch (_) {
+              await supabaseClient
+                .from('invoices')
+                .update({
+                  paid_amount: newPaid,
+                  status: newStatus,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', inv.id);
+            }
 
-            await supabaseClient
-              .from('payment_allocations')
-              .insert([{
-                payment_id: paymentId,
-                invoice_id: inv.id,
-                allocated_amount: alloc.amount,
-                created_at: new Date().toISOString()
-              }]);
+            try {
+              await supabaseClient
+                .from('payment_allocations')
+                .insert([{
+                  payment_id: paymentId,
+                  invoice_id: inv.id,
+                  allocated_amount: alloc.amount,
+                  created_at: new Date().toISOString()
+                }]);
+            } catch (pAllocErr) {
+              console.warn("Payment allocation record error:", pAllocErr);
+            }
           }
         }
 
         // Issue official receipt
         const receiptNumber = Utils.getNextReceiptNumber();
-        const newRemainingBalance = Math.max(0, StudentsModule.calculateOutstandingBalance(student) - amount);
+        const currentBal = StudentsModule.calculateOutstandingBalance(student);
+        const newRemainingBalance = Math.max(0, currentBal - amount);
 
         const { data: recData, error: recErr } = await supabaseClient
           .from('receipts')
@@ -409,13 +529,28 @@ const PaymentsModule = {
       Utils.closeModal('modal-record-payment');
       Utils.showToast("Payment Recorded", `Payment of ₹${amount} recorded successfully.`, "success");
 
-      // Reload state
+      // Reload state across all modules
       await PaymentsModule.loadPayments();
       await StudentsModule.loadStudents();
       await MonthlyFeesModule.loadInvoices();
-      await ReceiptsModule.loadReceipts();
+      if (typeof ReceiptsModule !== 'undefined' && ReceiptsModule.loadReceipts) {
+        await ReceiptsModule.loadReceipts();
+      }
 
+      // Re-render ALL views so balances, badges and tables update instantly
       PaymentsModule.renderPaymentsTable();
+      StudentsModule.renderStudentsTable();
+      MonthlyFeesModule.renderMonthlyFeesTable();
+      if (typeof ReceiptsModule !== 'undefined' && ReceiptsModule.renderReceiptsTable) {
+        ReceiptsModule.renderReceiptsTable();
+      }
+      if (typeof DashboardModule !== 'undefined' && DashboardModule.updateMetrics) {
+        DashboardModule.updateMetrics();
+        DashboardModule.renderOutstandingStudentsList();
+      }
+      if (StudentsModule.currentProfileStudentId) {
+        await StudentsModule.viewProfile(StudentsModule.currentProfileStudentId);
+      }
 
       // Immediately display receipt with one-click WhatsApp action
       if (receiptId) {
@@ -524,10 +659,17 @@ const PaymentsModule = {
       await StudentsModule.loadStudents();
       await ReceiptsModule.loadReceipts();
 
-      // 8. Re-render views
+      // 8. Re-render all views
       PaymentsModule.renderPaymentsTable();
-      ReceiptsModule.renderReceiptsTable();
+      if (typeof ReceiptsModule !== 'undefined' && ReceiptsModule.renderReceiptsTable) {
+        ReceiptsModule.renderReceiptsTable();
+      }
+      StudentsModule.renderStudentsTable();
       MonthlyFeesModule.renderMonthlyFeesTable();
+      if (typeof DashboardModule !== 'undefined' && DashboardModule.updateMetrics) {
+        DashboardModule.updateMetrics();
+        DashboardModule.renderOutstandingStudentsList();
+      }
 
       // If viewing student profile, re-render it
       if (StudentsModule.currentProfileStudentId) {
