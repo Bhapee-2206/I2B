@@ -52,8 +52,9 @@ EduTrack is a modern, responsive, private administration system built to replace
 6. **Promotions**: Strictly manual academic promotions with automatic fee recalculation for future billing cycles while preserving past ledger history.
 7. **Receipts**: Official receipts directory with instant PDF download, browser print, and parent WhatsApp click-to-chat.
 8. **Reports**: Tuition collection and pending fee reports with Excel (`.xlsx`) and CSV export.
-9. **Excel Import**: Built-in parser for `I2B.xlsx` to preview and import students and programmes.
-10. **Settings**: Organisation branding, currency symbol (`₹`), receipt/invoice prefixes, default due day, and programme management.
+9. **Attendance**: Daily student attendance register with local date formatting, programme schedules, segmented touch controls, history correction, reports, and Excel export.
+10. **Excel Import**: Built-in parser for Excel sheets to preview and import students and programmes.
+11. **Settings**: Organisation branding, currency symbol (`₹`), receipt/invoice prefixes, default due day, and programme management.
 
 ---
 
