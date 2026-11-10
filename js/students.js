@@ -1030,35 +1030,101 @@ const StudentsModule = {
     const studentName = student ? student.name : 'this student';
     const studentCode = student?.student_id ? ` (${student.student_id})` : '';
 
-    const confirmMsg = `Are you sure you want to permanently delete ${studentName}${studentCode}?\n\nThis will remove the student profile, all enrolments, invoices, and payment records.\nThis action cannot be undone.`;
+    const confirmMsg = `Are you sure you want to permanently delete ${studentName}${studentCode}?\n\nThis will remove the student profile and ALL associated records (enrolments, invoices, payments, and receipts).\nThis action cannot be undone.`;
     if (!confirm(confirmMsg)) return;
 
     try {
-      // 1. Delete student from Supabase (foreign keys ON DELETE CASCADE handle enrolments, invoices, payments, etc.)
-      const { error } = await supabaseClient
+      // 1. Find all payments and invoices for this student to cleanly cascade
+      const { data: studentPayments } = await supabaseClient
+        .from('payments')
+        .select('id')
+        .eq('student_id', studentId);
+      const paymentIds = (studentPayments || []).map(p => p.id);
+
+      const { data: studentInvoices } = await supabaseClient
+        .from('invoices')
+        .select('id')
+        .eq('student_id', studentId);
+      const invoiceIds = (studentInvoices || []).map(i => i.id);
+
+      // 2. Delete receipts & payment allocations for student's payments
+      if (paymentIds.length > 0) {
+        await supabaseClient
+          .from('receipts')
+          .delete()
+          .in('payment_id', paymentIds);
+
+        await supabaseClient
+          .from('payment_allocations')
+          .delete()
+          .in('payment_id', paymentIds);
+      }
+
+      // 3. Delete allocations & items for student's invoices
+      if (invoiceIds.length > 0) {
+        await supabaseClient
+          .from('payment_allocations')
+          .delete()
+          .in('invoice_id', invoiceIds);
+
+        await supabaseClient
+          .from('invoice_items')
+          .delete()
+          .in('invoice_id', invoiceIds);
+      }
+
+      // 4. Delete payments (clears payments_student_id_fkey constraint)
+      await supabaseClient
+        .from('payments')
+        .delete()
+        .eq('student_id', studentId);
+
+      // 5. Delete invoices (clears invoices_student_id_fkey constraint)
+      await supabaseClient
+        .from('invoices')
+        .delete()
+        .eq('student_id', studentId);
+
+      // 6. Delete class_history
+      await supabaseClient
+        .from('class_history')
+        .delete()
+        .eq('student_id', studentId);
+
+      // 7. Delete enrollments
+      await supabaseClient
+        .from('enrollments')
+        .delete()
+        .eq('student_id', studentId);
+
+      // 8. Finally delete student profile
+      const { error: studentErr } = await supabaseClient
         .from('students')
         .delete()
         .eq('id', studentId);
 
-      if (error) throw error;
+      if (studentErr) throw studentErr;
 
-      // 2. Audit log
+      // 9. Audit log
       try {
         await AuthModule.logAudit('delete_student', 'students', studentId, { name: studentName });
       } catch (_) {}
 
       Utils.showToast("Student Deleted", `${studentName} was permanently deleted.`, "success");
 
-      // 3. Close modal if open
+      // 10. Close modal if open
       Utils.closeModal('modal-add-student');
 
-      // 4. Refresh all stores
+      // 11. Refresh all stores
       await StudentsModule.loadStudents();
       await MonthlyFeesModule.loadInvoices();
       await PaymentsModule.loadPayments();
+      if (typeof ReceiptsModule !== 'undefined' && ReceiptsModule.loadReceipts) {
+        await ReceiptsModule.loadReceipts();
+      }
       StudentsModule.renderStudentsTable();
 
-      // 5. If currently viewing this student's profile, navigate back to directory
+      // 12. If currently viewing this student's profile, navigate back to directory
       if (StudentsModule.currentProfileStudentId === studentId || window.location.hash.includes('student-profile')) {
         StudentsModule.currentProfileStudentId = null;
         window.location.hash = '#students';
