@@ -1248,7 +1248,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Excel Workbook Importer</div>
-                <div class="card-subtitle">Import student records and multi-programme enrolments from Excel workbook (.xlsx)</div>
+                <div class="card-subtitle">Import student records and multi-programme enrolments from Excel (I2B.xlsx)</div>
               </div>
             </div>
 
@@ -1256,7 +1256,7 @@
               <i data-lucide="upload-cloud" style="width: 44px; height: 44px; color: var(--accent-blue); margin-bottom: 0.5rem;"></i>
               <h3 style="font-size: 1.05rem; margin-bottom: 0.25rem;">Upload Excel Workbook (.xlsx)</h3>
               <p style="font-size: 0.82rem; color: var(--text-muted); max-width: 460px; margin: 0 auto 1rem auto;">
-                Select your Excel spreadsheet (.xlsx). EduTrack parses Subject, Hindi, Weekend Hindi and Online Hindi tracks, deduplicating students attending multiple programmes.
+                Select your <code>I2B.xlsx</code> file. EduTrack parses Subject, Hindi, Weekend Hindi and Online Hindi tracks, deduplicating students attending multiple programmes.
               </p>
               <input type="file" id="excel-file-upload" accept=".xlsx, .xls" class="form-control" style="max-width: 320px; margin: 0 auto; display: block;">
             </div>
@@ -1526,6 +1526,21 @@
                   </tr>
                 </tbody>
               </table>
+
+              <div style="background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.85rem 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.75rem;">
+                <div>
+                  <strong style="font-size: 0.88rem;">Supabase Attendance Setup</strong>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">Execute the attendance database script in your Supabase SQL editor</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="AttendanceModule.copyMigrationSQL()">
+                    <i data-lucide="copy" style="width: 14px; height: 14px;"></i> Copy SQL Script
+                  </button>
+                  <a href="https://supabase.com/dashboard/project/bpowmzajdyvddnwrqupq/sql/new" target="_blank" class="btn btn-navy btn-sm">
+                    <i data-lucide="external-link" style="width: 14px; height: 14px;"></i> Open Supabase SQL Editor
+                  </a>
+                </div>
+              </div>
             </div>
 
             <hr style="border: none; border-top: 1px solid var(--border-light); margin: 2rem 0;">
@@ -2321,6 +2336,47 @@
             <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ATTENDANCE SUPABASE DATABASE SETUP MODAL -->
+  <div class="modal-overlay" id="modal-attendance-db-setup">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Attendance Database Setup</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">One-time step to enable cloud-synced attendance</div>
+        </div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-attendance-db-setup')">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem;">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1.15rem; font-size: 0.84rem; color: #1e40af; line-height: 1.5;">
+          <strong>Attendance is currently active in Local Mode.</strong> Your marked records are safely saved on this device. To sync attendance with Supabase PostgreSQL, run the SQL script in your Supabase project once.
+        </div>
+
+        <h4 style="font-size: 0.92rem; font-weight: 700; margin-bottom: 0.5rem;">Quick 3-Step Setup:</h4>
+        <div style="font-size: 0.84rem; color: var(--text-main); line-height: 1.7; margin-bottom: 1.25rem;">
+          <div>1. Click <strong>"Copy SQL Migration"</strong> below.</div>
+          <div>2. Click <strong>"Open Supabase SQL Editor"</strong> to open your project.</div>
+          <div>3. Paste into the editor and click the green <strong>"Run"</strong> button.</div>
+        </div>
+
+        <div style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" onclick="AttendanceModule.copyMigrationSQL()">
+            <i data-lucide="copy" style="width: 14px; height: 14px;"></i> Copy SQL Migration
+          </button>
+          <a href="https://supabase.com/dashboard/project/bpowmzajdyvddnwrqupq/sql/new" target="_blank" class="btn btn-secondary">
+            <i data-lucide="external-link" style="width: 14px; height: 14px;"></i> Open Supabase SQL Editor
+          </a>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-attendance-db-setup')">Got It</button>
       </div>
     </div>
   </div>
