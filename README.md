@@ -1,156 +1,136 @@
-# I2B – Student & Monthly Fee Management System
+# EduTrack — Student, Tuition & Fee Management System
 
-A production-ready, mobile-first institutional web application designed for managing student records, multi-programme enrolments, standard and custom fee structures, consolidated monthly invoices, payments, PDF receipts, WhatsApp sharing, overdue tracking, and financial analytics.
+A production-ready, fast, secure, and mobile-first administrative web application designed to replace spreadsheet-based student and tuition management workflows.
 
-Built for **I2B Educational Institution** to replace legacy Excel-based workflows with a secure, responsive, modern SaaS platform.
-
----
-
-## Key Features & Highlights
-
-### 1. Mobile-First Responsive Design (Zero Horizontal Scroll)
-- Built from the ground up for smartphones, tablets, laptops, and desktops.
-- Strict viewport compliance across all screen widths: **320px, 360px, 375px, 390px, 430px, 768px, 1024px, 1366px, 1920px**.
-- **Touch-First UI**: All primary buttons and action controls feature comfortable 44×44px touch targets.
-- **Responsive Tables to Cards**: Desktop multi-column data tables gracefully convert into high-density, readable student/payment cards on mobile viewports.
-- **Bottom Navigation Bar**: Smooth 1-thumb bottom navigation on smartphones and a sleek navy SaaS sidebar on desktop.
-- **Bottom Sheets**: Modal dialogs transform into bottom sheets on mobile devices.
-
-### 2. Complete Excel Migration (All 75 Records from `I2B.xlsx` Sheet1)
-- **100% faithful data migration**:
-  - **Subject**: 27 enrolment records (Listed monthly fee: ₹21,400)
-  - **Regular Hindi**: 24 enrolment records (Listed monthly fee: ₹14,300)
-  - **Weekend Hindi**: 20 enrolment records (Listed monthly fee: ₹12,000)
-  - **Online Hindi**: 4 enrolment records (Listed monthly fee: ₹3,150)
-  - **Total**: **75 enrolment records**, total listed fee: **₹50,850**.
-- **Financial Integrity**: In accordance with institutional policy, the ₹50,850 is preserved as agreed/proposed monthly enrolment fees. No phantom historical payments or receipts are generated.
-- **Duplicate & Spelling Review Workspace**: Built-in review dashboard flags duplicate names and spelling variations (e.g. *Monish* [appears 4 times], *Maha sri / Maha sree*, *Bhairavi / Bairavi*, *Nikitha*, *Nishitha*, *Harishankar*) allowing administrator verification.
-
-### 3. Student & Multi-Programme Management
-- Central student record supporting multiple concurrent programme enrolments.
-- Auto-generated student codes (e.g., `I2B-STU-001`).
-- Parent/guardian contact details, primary WhatsApp phone, admission date, and account status.
-- Individual student profile containing active courses, billing history, payment ledger, and real-time outstanding balance.
-
-### 4. Standard Fee Structures (Matric, CBSE, Virtual & Online)
-- **Regular Tuition Matrix**: LKG through 12th standard with Matric and CBSE pricing.
-- **Hindi Matrix**: Basic through 9th standard with Virtual and Online pricing.
-- **Preservation Policy**: Updating standard fee structures never alters existing students' agreed fees.
-
-### 5. Consolidated Monthly Invoice Generator
-- **Manual Administrator Generation**: Invoices are generated under administrative preview, avoiding accidental automated charges.
-- **Consolidated Billing**: Combines multiple course fees for the same student into a single monthly invoice with itemized programme charges.
-- **Duplicate Prevention**: Database constraints and application logic strictly prevent duplicate invoicing for the same student and billing period.
-
-### 6. Payments & Financial Transactions
-- Supports Cash, UPI (GPay/PhonePe/Paytm), Bank Transfer (NEFT/IMPS), and Cheque.
-- **Multi-Invoice Allocation**: Split single payments across multiple outstanding invoices.
-- **Audit Reversals**: Full transaction audit trail with reversible payments that adjust balances without data deletion.
-
-### 7. Vector PDF Receipt Generator (jsPDF)
-- Generates official institutional receipts with:
-  - Official I2B logo and branding
-  - Sequential unique receipt number (`REC-YYYYMM-001`)
-  - Student and parent details
-  - Enrolment programme and billing period
-  - Amount in figures and **Indian Rupee words** (e.g. *Rupees Six Hundred Fifty Only*)
-  - Remaining outstanding balance
-  - Authorized signatory seal
-- 1-click Download, Print, and WhatsApp sharing.
-
-### 8. WhatsApp Sharing (Modes A & B)
-- **Mode A (Active Release)**: Instant manual WhatsApp delivery via `wa.me` links prefilled with parent phone, payment acknowledgment, and remaining balance. Tracks delivery status (*Not Shared*, *Initiated*, *Confirmed Sent*).
-- **Mode B (Prepared Architecture)**: Meta WhatsApp Cloud API configuration interface and Supabase Edge Function skeleton.
-- **Overdue Reminders**: 1-click polite reminder dispatching for overdue fees.
-
-### 9. Operational & Financial Reports
-- Monthly collection statements, outstanding balances report, enrolment roster, and payment method breakdowns.
-- **Export**: 1-click export to Excel (`.xlsx`) and `.csv`.
+Built with **React, Vite, TypeScript, Tailwind CSS, and Supabase PostgreSQL**, EduTrack provides single-screen student registration across multiple programmes, automatic fee calculation, monthly billing, payment collection, vector PDF receipt generation, WhatsApp click-to-chat sharing, manual student class promotions, and comprehensive financial reports.
 
 ---
 
-## Technology Stack
+## 1. Key Capabilities
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, React Router v7, Lucide Icons, Recharts, Sonner.
-- **PDF & Export**: jsPDF, SheetJS (xlsx).
-- **Backend & Database**: Supabase PostgreSQL, Supabase Authentication, Row Level Security (RLS).
-- **Hosting & Deployment**: Cloudflare Pages connected to GitHub.
+### Single-Screen Multi-Programme Registration
+- Register a student and enroll them in one or multiple programmes (Subject, Hindi, Weekend Hindi, Online Hindi) on a single screen.
+- Auto-fetches the monthly fee from the active fee structure based on programme, class/grade, and board.
+- Instant combined monthly fee calculation across all programmes.
+- Optional fee override with mandatory audit reason.
+- Auto-generates sequential student codes (e.g., `STU-0001`, `STU-0002`).
+
+### Manual Student Class Promotions
+- **Strictly manual workflow**: EduTrack never automatically increments student classes on calendar dates.
+- Advance students to their next school grade individually or in batch.
+- Auto-fetches new applicable fees for the next grade while preserving all historical invoices and payments.
+- Records old and new class, old and new fee, board, academic year, and effective date with complete audit tracking.
+
+### Monthly Billing & Invoices
+- Generate consolidated monthly invoices for active enrolments.
+- Idempotent generation prevents duplicate invoices for the same student and billing period.
+- Supports unpaid, partially paid, paid, overdue, and void statuses.
+
+### Payment Collection & Allocations
+- Collect payments via Cash, UPI (GPay/PhonePe/Paytm), Bank Transfer (NEFT/IMPS), or Cheque.
+- Split payments across multiple invoices with strict balance validation preventing over-allocation.
+- Reversal and correction workflow with audit logging.
+
+### Professional Vector PDF Receipts & WhatsApp Sharing
+- Instant vector PDF receipts generated via `jsPDF` with organization branding, sequential receipt numbers (`REC-YYYYMM-001`), and Indian Rupee amounts in words.
+- WhatsApp click-to-chat sharing opens the parent's chat with a pre-filled acknowledgment message and directs the administrator to attach the downloaded PDF receipt.
+
+### Excel Migration & Reports
+- Pre-loaded and tested against `I2B.xlsx` (all 75 student enrolment records and ₹50,850 total monthly fee verified).
+- Export reports to Excel (`.xlsx`), CSV, and printable format.
 
 ---
 
-## Getting Started
+## 2. Technology Stack
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, React Router v7 (HashRouter for zero-config GitHub Pages hosting), Lucide React, Recharts, Sonner toasts.
+- **Backend & Database**: Supabase (PostgreSQL), Supabase Authentication, Row Level Security (RLS).
+- **Document Generation**: jsPDF, SheetJS (`xlsx`).
+- **Deployment**: GitHub Pages via GitHub Actions (`.github/workflows/deploy.yml`).
+
+---
+
+## 3. Quick Start & Setup
 
 ### Prerequisites
 - Node.js (v18+ or v22+)
 - npm
 
-### 1. Clone & Install Dependencies
+### 1. Clone & Install
 ```bash
-git clone <your-repo-url>
+git clone <repository-url>
 cd I2B
 npm install
 ```
 
-### 2. Environment Configuration
-Create a `.env` file in the root directory (refer to `.env.example`):
+### 2. Configure Environment
+Create a `.env` file in the project root:
 ```env
 VITE_SUPABASE_URL=https://bpowmzajdyvddnwrqupq.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_tOJHMzK7gIQWRpulr2lnpw_6relRYHP
-VITE_APP_NAME="I2B"
+VITE_APP_NAME="EduTrack"
 VITE_APP_SUBTITLE="Student & Fee Management"
 ```
 
-### 3. Run Development Server
+### 3. Start Development Server
 ```bash
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser or smartphone.
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### 4. Administrator Credentials
+### 4. Admin Login
 - **Email**: `admin@i2b-edu.com`
 - **Password**: `Admin@123`
 
 ---
 
-## Database Migration Setup (Supabase PostgreSQL)
+## 4. Database Setup & Supabase Migrations
 
-All SQL schemas, tables, indexes, RLS policies, standard fee matrices, and the 75 Excel migration records are consolidated into a single SQL script:
+The database tables, RLS policies, standard fee matrices, and initial migration records are available in:
+- `supabase/migrations/20261109000000_init_i2b_schema.sql` (schema, tables, constraints, RLS)
+- `supabase/migrations/20261109000001_seed_i2b_data.sql` (seed data, programmes, fee structures)
+- `supabase/schema_and_seed_all_in_one.sql` (consolidated migration script)
 
-**File**: `supabase/schema_and_seed_all_in_one.sql`
-
-### How to apply to your Supabase project:
-1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/bpowmzajdyvddnwrqupq/sql/new).
-2. Copy the entire contents of `supabase/schema_and_seed_all_in_one.sql` (or click **"Copy SQL Migration Script"** inside the I2B app header/settings).
-3. Paste into the SQL Editor and click **Run**.
-4. The tables will immediately sync with the live application!
-
-*(Note: If tables are not yet migrated, the application operates seamlessly in local persistence mode without crashing, and switches to live PostgreSQL once the schema is applied.)*
+### To apply to Supabase:
+1. Open the Supabase Dashboard: [https://supabase.com/dashboard/project/bpowmzajdyvddnwrqupq/sql/new](https://supabase.com/dashboard/project/bpowmzajdyvddnwrqupq/sql/new)
+2. Paste the contents of `supabase/schema_and_seed_all_in_one.sql`.
+3. Click **Run**. All tables will sync immediately.
 
 ---
 
-## Production Build & Cloudflare Pages Deployment
+## 5. Automated Verification & Test Suite
 
-### Build for Production
+Run the automated financial integrity test suite:
 ```bash
-npm run build
+node tests/financial_calculations.test.mjs
 ```
-Build outputs are placed in the `dist/` directory with `_redirects` for client-side routing.
-
-### Cloudflare Pages Deployment Steps:
-1. Push repository to GitHub.
-2. In Cloudflare Dashboard, go to **Workers & Pages** > **Create application** > **Pages** > **Connect to Git**.
-3. Select your repository.
-4. Set build settings:
-   - **Framework preset**: `Vite`
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-   - **Environment variables**:
-     - `VITE_SUPABASE_URL`: `https://bpowmzajdyvddnwrqupq.supabase.co`
-     - `VITE_SUPABASE_ANON_KEY`: `sb_publishable_tOJHMzK7gIQWRpulr2lnpw_6relRYHP`
-5. Click **Save and Deploy**. Cloudflare Pages will provide a free platform URL (e.g., `https://i2b-fee-management.pages.dev`).
+**Test Results**:
+- `TEST 1 PASSED`: 75 Migration Records and ₹50,850 Total Verified from `I2B.xlsx`
+- `TEST 2 PASSED`: Currency Words Conversion Verified Across All Edge Cases
+- `TEST 3 PASSED`: Multi-Invoice Payment Allocation and Balance Recalculation Verified
+- `TEST 4 PASSED`: Duplicate Invoice Prevention Logic Verified
+- `TEST 5 PASSED`: Days Overdue Calculations Verified
 
 ---
 
-## License & Confidentiality
-Private administrative software built exclusively for I2B Educational Institution.
+## 6. GitHub Pages Deployment
 
+The repository includes an automated GitHub Actions deployment workflow at `.github/workflows/deploy.yml`.
+
+### Deployment Steps:
+1. Push the code to the `main` branch on GitHub:
+   ```bash
+   git add .
+   git commit -m "Deploy EduTrack application"
+   git push origin main
+   ```
+2. In your GitHub repository:
+   - Navigate to **Settings** > **Pages**.
+   - Under **Build and deployment** > **Source**, select **GitHub Actions**.
+3. The workflow will automatically trigger, build the application, and publish it to GitHub Pages.
+4. With SPA 404 fallback and `HashRouter` enabled, refreshing any route works without 404 errors.
+
+---
+
+## 7. License & Usage
+Private administrative software designed for institutional student, tuition, and fee management.

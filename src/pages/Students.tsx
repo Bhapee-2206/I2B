@@ -12,7 +12,11 @@ import {
   CheckCircle2,
   Calendar,
   X,
-  UserPlus
+  UserPlus,
+  Trash2,
+  Layers,
+  IndianRupee,
+  AlertCircle
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/common/Button';
@@ -32,6 +36,8 @@ import {
   createStudent,
   updateStudent,
   createEnrollment,
+  createStudentWithEnrollments,
+  ProgrammeEnrollmentInput
 } from '../services/dbService';
 import {
   SUBJECT_CLASSES,
@@ -88,13 +94,19 @@ export const Students: React.FC = () => {
     notes: '',
   });
 
-  // Enrolment fields (for new student only)
-  const [enrolData, setEnrolData] = useState({
-    programme_id: '',
-    class_or_grade: '',
-    board: 'Matric',
-    agreed_fee: 0,
-  });
+  // Multi-programme rows for new student
+  interface ProgrammeRowState {
+    id: string;
+    programme_id: string;
+    class_or_grade: string;
+    board: string;
+    joining_date: string;
+    monthly_fee: number;
+    is_override: boolean;
+    override_reason: string;
+  }
+
+  const [programmeRows, setProgrammeRows] = useState<ProgrammeRowState[]>([]);
 
   const loadData = async () => {
     try {
@@ -108,11 +120,6 @@ export const Students: React.FC = () => {
       setEnrollments(enrs);
       setProgrammes(progs);
       setFeeStructures(fees);
-
-      // Set default enrolment programme
-      if (progs.length > 0 && !enrolData.programme_id) {
-        setEnrolData(prev => ({ ...prev, programme_id: progs[0].id }));
-      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to load students');
@@ -124,20 +131,6 @@ export const Students: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  // Auto-lookup fee when programme/class/board changes
-  useEffect(() => {
-    if (!enrolData.programme_id || !enrolData.class_or_grade) return;
-    const fee = findMatchingFee(
-      feeStructures,
-      enrolData.programme_id,
-      enrolData.class_or_grade,
-      enrolData.board
-    );
-    if (fee !== null && fee > 0) {
-      setEnrolData((prev) => ({ ...prev, agreed_fee: fee }));
-    }
-  }, [enrolData.programme_id, enrolData.class_or_grade, enrolData.board, feeStructures]);
 
   const openAddModal = () => {
     setEditingStudent(null);
@@ -152,12 +145,21 @@ export const Students: React.FC = () => {
       status: 'active',
       notes: '',
     });
-    setEnrolData({
-      programme_id: programmes[0]?.id || '',
-      class_or_grade: '',
-      board: 'Matric',
-      agreed_fee: 0,
-    });
+
+    const defaultProg = programmes[0]?.id || '';
+    const initialFee = findMatchingFee(feeStructures, defaultProg, 'LKG', 'Matric') || 500;
+    setProgrammeRows([
+      {
+        id: crypto.randomUUID(),
+        programme_id: defaultProg,
+        class_or_grade: 'LKG',
+        board: 'Matric',
+        joining_date: new Date().toISOString().split('T')[0],
+        monthly_fee: initialFee,
+        is_override: false,
+        override_reason: '',
+      },
+    ]);
     setIsModalOpen(true);
   };
 
@@ -178,17 +180,77 @@ export const Students: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleProgrammeChange = (progId: string) => {
-    const prog = programmes.find((p) => p.id === progId);
-    const boards = getBoardOptions(prog);
-    setEnrolData((prev) => ({
+  const handleAddProgrammeRow = () => {
+    const usedProgIds = new Set(programmeRows.map((r) => r.programme_id));
+    const availableProg = programmes.find((p) => !usedProgIds.has(p.id)) || programmes[0];
+    const progId = availableProg?.id || '';
+    const isSubject = availableProg?.code === 'SUBJECT';
+    const defaultCls = isSubject ? '1st' : 'Basic';
+    const defaultBrd = isSubject ? 'Matric' : 'Virtual';
+    const fee = findMatchingFee(feeStructures, progId, defaultCls, defaultBrd) || 500;
+
+    setProgrammeRows((prev) => [
       ...prev,
-      programme_id: progId,
-      class_or_grade: '',
-      board: boards[0] || 'Matric',
-      agreed_fee: 0,
-    }));
+      {
+        id: crypto.randomUUID(),
+        programme_id: progId,
+        class_or_grade: defaultCls,
+        board: defaultBrd,
+        joining_date: new Date().toISOString().split('T')[0],
+        monthly_fee: fee,
+        is_override: false,
+        override_reason: '',
+      },
+    ]);
   };
+
+  const handleRemoveProgrammeRow = (rowId: string) => {
+    if (programmeRows.length <= 1) {
+      toast.error('A student must have at least one programme row');
+      return;
+    }
+    setProgrammeRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
+  const handleRowChange = (rowId: string, updates: Partial<ProgrammeRowState>) => {
+    setProgrammeRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const merged = { ...r, ...updates };
+
+        // If programme changed, reset class & board to valid options
+        if ('programme_id' in updates) {
+          const prog = programmes.find((p) => p.id === updates.programme_id);
+          const isSubj = prog?.code === 'SUBJECT';
+          merged.class_or_grade = isSubj ? 'LKG' : 'Basic';
+          merged.board = isSubj ? 'Matric' : 'Virtual';
+        }
+
+        // Auto lookup fee if not overridden
+        if (
+          ('programme_id' in updates || 'class_or_grade' in updates || 'board' in updates) &&
+          !merged.is_override
+        ) {
+          const match = findMatchingFee(
+            feeStructures,
+            merged.programme_id,
+            merged.class_or_grade,
+            merged.board
+          );
+          if (match !== null) {
+            merged.monthly_fee = match;
+          }
+        }
+
+        return merged;
+      })
+    );
+  };
+
+  const combinedMonthlyFee = programmeRows.reduce(
+    (sum, r) => sum + (Number(r.monthly_fee) || 0),
+    0
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,14 +258,30 @@ export const Students: React.FC = () => {
       toast.error('Student name is required');
       return;
     }
+
     if (!editingStudent && includeEnrolment) {
-      if (!enrolData.programme_id || !enrolData.class_or_grade) {
-        toast.error('Please select programme and class/grade for enrolment');
+      if (programmeRows.length === 0) {
+        toast.error('Please add at least one programme enrolment');
         return;
       }
-      if (enrolData.agreed_fee <= 0) {
-        toast.error('Agreed monthly fee must be greater than zero');
+
+      // Validate duplicate active programmes
+      const progIds = programmeRows.map((r) => r.programme_id);
+      const uniqueProgs = new Set(progIds);
+      if (progIds.length !== uniqueProgs.size) {
+        toast.error('Duplicate active programmes selected. A student can only have one active enrolment per programme.');
         return;
+      }
+
+      for (const r of programmeRows) {
+        if (!r.class_or_grade) {
+          toast.error('Please specify class/grade for all selected programmes');
+          return;
+        }
+        if (r.monthly_fee <= 0) {
+          toast.error('Monthly fee must be greater than zero for all programmes');
+          return;
+        }
       }
     }
 
@@ -213,20 +291,23 @@ export const Students: React.FC = () => {
         await updateStudent(editingStudent.id, formData);
         toast.success(`Updated details for ${formData.name}`);
       } else {
-        const created = await createStudent(formData);
         if (includeEnrolment) {
-          await createEnrollment({
-            student_id: created.id,
-            programme_id: enrolData.programme_id,
-            class_or_grade: enrolData.class_or_grade,
-            board: enrolData.board,
-            agreed_fee: enrolData.agreed_fee,
-            start_date: formData.admission_date,
-            status: 'active',
-            is_verified: true,
-          });
-          toast.success(`${created.name} registered & enrolled! (ID: ${created.student_id})`);
+          const enrolInputs: ProgrammeEnrollmentInput[] = programmeRows.map((r) => ({
+            programme_id: r.programme_id,
+            class_or_grade: r.class_or_grade,
+            board: r.board,
+            agreed_fee: r.monthly_fee,
+            start_date: r.joining_date,
+            fee_override: r.is_override,
+            fee_override_reason: r.override_reason || undefined,
+          }));
+
+          const { student: created } = await createStudentWithEnrollments(formData, enrolInputs);
+          toast.success(
+            `Registered ${created.name} in ${enrolInputs.length} programmes! Total: ₹${combinedMonthlyFee.toLocaleString('en-IN')}/mo (ID: ${created.student_id})`
+          );
         } else {
+          const created = await createStudent(formData);
           toast.success(`Student ${created.name} created! (ID: ${created.student_id})`);
         }
       }
@@ -264,10 +345,6 @@ export const Students: React.FC = () => {
 
     return matchesQuery && matchesStatus && matchesProg;
   });
-
-  const selectedProg = programmes.find((p) => p.id === enrolData.programme_id);
-  const classOptions = getClassOptions(selectedProg);
-  const boardOptions = getBoardOptions(selectedProg);
 
   return (
     <div className="space-y-5">
@@ -606,102 +683,222 @@ export const Students: React.FC = () => {
             />
           </div>
 
-          {/* ── SECTION 2: ENROLMENT (new student only) ── */}
+          {/* ── SECTION 2: PROGRAMME ENROLMENTS (Single-screen multi-programme registration) ── */}
           {!editingStudent && (
-            <>
-              <div className="flex items-center justify-between pt-1">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Programme Enrolment
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-emerald-600" />
+                    <span>Programme Details ({programmeRows.length})</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Register student in one or multiple programmes simultaneously
+                  </p>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs text-slate-500">Include enrolment</span>
-                  <div
-                    onClick={() => setIncludeEnrolment(!includeEnrolment)}
-                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
-                      includeEnrolment ? 'bg-emerald-500' : 'bg-slate-300'
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        includeEnrolment ? 'translate-x-4' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </div>
-                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddProgrammeRow}
+                  icon={<Plus className="w-3.5 h-3.5 text-emerald-600" />}
+                >
+                  Add Another Programme
+                </Button>
               </div>
 
-              {includeEnrolment && (
-                <div className="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-xl space-y-3">
-                  <Select
-                    label="Programme"
-                    value={enrolData.programme_id}
-                    onChange={(e) => handleProgrammeChange(e.target.value)}
-                    options={programmes.map((p) => ({ value: p.id, label: p.name }))}
-                    required
-                  />
+              {/* Programme Rows Cards */}
+              <div className="space-y-3">
+                {programmeRows.map((row, index) => {
+                  const progObj = programmes.find((p) => p.id === row.programme_id);
+                  const classOpts = getClassOptions(progObj);
+                  const boardOpts = getBoardOptions(progObj);
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Class / Grade <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={enrolData.class_or_grade}
-                        onChange={(e) => setEnrolData({ ...enrolData, class_or_grade: e.target.value })}
-                        required={includeEnrolment}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
-                      >
-                        <option value="">— Select class —</option>
-                        {classOptions.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
+                  return (
+                    <div
+                      key={row.id}
+                      className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-3 relative transition-all"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">
+                          Programme #{index + 1}
+                        </span>
+                        {programmeRows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveProgrammeRow(row.id)}
+                            className="text-slate-400 hover:text-rose-500 p-1 rounded-lg transition"
+                            title="Remove programme row"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Board / Mode
-                      </label>
-                      <select
-                        value={enrolData.board}
-                        onChange={(e) => setEnrolData({ ...enrolData, board: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
-                      >
-                        {boardOptions.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* Programme */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Programme <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={row.programme_id}
+                            onChange={(e) => handleRowChange(row.id, { programme_id: e.target.value })}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                            required
+                          >
+                            {programmes.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Agreed Monthly Fee (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="50"
-                        min="0"
-                        value={enrolData.agreed_fee || ''}
-                        onChange={(e) =>
-                          setEnrolData({ ...enrolData, agreed_fee: parseFloat(e.target.value) || 0 })
-                        }
-                        placeholder="Auto-filled from fee structure"
-                        required={includeEnrolment}
-                        className="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 py-2 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200/60 focus:outline-none"
-                      />
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                        {/* Class */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Class / Grade <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={row.class_or_grade}
+                            onChange={(e) => handleRowChange(row.id, { class_or_grade: e.target.value })}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none font-bold"
+                            required
+                          >
+                            {classOpts.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Board */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Board / Mode
+                          </label>
+                          <select
+                            value={row.board}
+                            onChange={(e) => handleRowChange(row.id, { board: e.target.value })}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none"
+                          >
+                            {boardOpts.map((b) => (
+                              <option key={b} value={b}>
+                                {b}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            Joining Date
+                          </label>
+                          <input
+                            type="date"
+                            value={row.joining_date}
+                            onChange={(e) => handleRowChange(row.id, { joining_date: e.target.value })}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-slate-700">
+                              Monthly Fee (₹) <span className="text-rose-500">*</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[10px] text-slate-500 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={row.is_override}
+                                onChange={(e) =>
+                                  handleRowChange(row.id, { is_override: e.target.checked })
+                                }
+                                className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5"
+                              />
+                              <span>Override fee</span>
+                            </label>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="50"
+                              min="0"
+                              value={row.monthly_fee || ''}
+                              onChange={(e) =>
+                                handleRowChange(row.id, {
+                                  monthly_fee: parseFloat(e.target.value) || 0,
+                                  is_override: true,
+                                })
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white pl-6 pr-3 py-1.5 text-xs font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none"
+                              required
+                            />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">
+                              ₹
+                            </span>
+                          </div>
+                          {!row.is_override && (
+                            <p className="text-[10px] text-emerald-600 mt-0.5">
+                              ✓ Auto-fetched from fee structure
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fee Override Reason if enabled */}
+                      {row.is_override && (
+                        <div className="pt-1">
+                          <label className="block text-[10px] font-semibold text-amber-800 mb-0.5">
+                            Reason for fee override <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Sibling discount, scholarship, special approval"
+                            value={row.override_reason}
+                            onChange={(e) =>
+                              handleRowChange(row.id, { override_reason: e.target.value })
+                            }
+                            required={row.is_override}
+                            className="w-full rounded-xl border border-amber-300 bg-amber-50/50 px-2.5 py-1.5 text-xs text-amber-900 focus:border-amber-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
-                    {enrolData.agreed_fee > 0 && (
-                      <p className="text-[11px] text-emerald-600 mt-1 font-medium">
-                        ✓ Fee auto-populated from fee structure
-                      </p>
-                    )}
+                  );
+                })}
+              </div>
+
+              {/* Combined Monthly Fee Summary Box */}
+              <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-sm">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                    Combined Monthly Fee Summary
+                  </span>
+                  <div className="text-[11px] text-slate-600 flex items-center gap-1.5">
+                    {programmeRows.map((r, i) => {
+                      const progName = programmes.find((p) => p.id === r.programme_id)?.name || 'Programme';
+                      return (
+                        <span key={r.id}>
+                          {progName}: ₹{r.monthly_fee}
+                          {i < programmeRows.length - 1 ? ' + ' : ''}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
-            </>
+                <div className="text-right">
+                  <span className="text-[10px] text-emerald-700 font-medium block">Total Monthly Due</span>
+                  <span className="text-base font-extrabold text-emerald-800 font-mono">
+                    ₹{combinedMonthlyFee.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
 
           <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
@@ -720,7 +917,7 @@ export const Students: React.FC = () => {
               loading={formSubmitting}
               icon={!editingStudent ? <UserPlus className="w-4 h-4" /> : undefined}
             >
-              {editingStudent ? 'Save Changes' : 'Register & Enrol'}
+              {editingStudent ? 'Save Changes' : 'Save Student & Programmes'}
             </Button>
           </div>
         </form>

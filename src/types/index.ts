@@ -183,6 +183,37 @@ export interface AuditLog {
   created_at?: string;
 }
 
+export interface AcademicYear {
+  id: string;
+  year_name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface ClassPromotionRecord {
+  id: string;
+  student_id: string;
+  enrollment_id: string;
+  programme_id?: string;
+  academic_year: string;
+  old_class: string;
+  new_class: string;
+  old_board?: string | null;
+  new_board?: string | null;
+  old_fee: number;
+  new_fee: number;
+  effective_date: string;
+  promotion_type: 'promoted' | 'repeated' | 'custom' | 'board_change' | 'held';
+  notes?: string | null;
+  performed_by?: string | null;
+  created_at?: string;
+  // Joined
+  student?: Student;
+  programme?: Programme;
+}
+
 export interface InstitutionSettings {
   id: string;
   institution_name: string;

@@ -18,6 +18,7 @@ import { Overdue } from './pages/Overdue';
 import { Migration } from './pages/Migration';
 import { FeeStructures } from './pages/FeeStructures';
 import { Programmes } from './pages/Programmes';
+import { Promotions } from './pages/Promotions';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 
@@ -64,16 +65,19 @@ export const App: React.FC = () => {
               <Route index element={<Dashboard />} />
               <Route path="students" element={<Students />} />
               <Route path="students/:id" element={<StudentDetail />} />
-              <Route path="enrollments" element={<Enrollments />} />
-              <Route path="invoices" element={<Invoices />} />
+              <Route path="fee-collection" element={<Payments />} />
               <Route path="payments" element={<Payments />} />
-              <Route path="receipts" element={<Receipts />} />
-              <Route path="overdue" element={<Overdue />} />
-              <Route path="migration" element={<Migration />} />
+              <Route path="monthly-fees" element={<Invoices />} />
+              <Route path="invoices" element={<Invoices />} />
               <Route path="fee-structures" element={<FeeStructures />} />
-              <Route path="programmes" element={<Programmes />} />
+              <Route path="promotions" element={<Promotions />} />
+              <Route path="receipts" element={<Receipts />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="enrollments" element={<Enrollments />} />
+              <Route path="overdue" element={<Overdue />} />
+              <Route path="migration" element={<Migration />} />
+              <Route path="programmes" element={<Programmes />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

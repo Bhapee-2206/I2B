@@ -17,7 +17,9 @@ import {
   MigrationRecord,
   InstitutionSettings,
   AuditLog,
-  MessageLog
+  MessageLog,
+  ClassPromotionRecord,
+  AcademicYear
 } from '../types';
 import {
   DEFAULT_SETTINGS,
@@ -42,6 +44,8 @@ const LOCAL_STORAGE_KEYS = {
   MIGRATION_RECORDS: 'i2b_migration_records_v1',
   AUDIT_LOGS: 'i2b_audit_logs_v1',
   MESSAGE_LOGS: 'i2b_message_logs_v1',
+  ACADEMIC_YEARS: 'edutrack_academic_years_v1',
+  PROMOTION_HISTORY: 'edutrack_promotion_history_v1',
   IS_SUPABASE_ONLINE: 'i2b_supabase_online',
 };
 
@@ -294,12 +298,24 @@ export async function getStudentById(id: string): Promise<Student | null> {
   return students.find(s => s.id === id || s.student_id === id) || null;
 }
 
+export function generateNextStudentCode(students: Student[], prefix: string = 'STU'): string {
+  let maxId = 0;
+  for (const s of students) {
+    const match = s.student_id?.match(/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxId) maxId = num;
+    }
+  }
+  const nextNum = maxId + 1;
+  return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+}
+
 export async function createStudent(stu: Omit<Student, 'id' | 'student_id' | 'created_at'>): Promise<Student> {
   const students = await getStudents();
   const settings = await getSettings();
   const prefix = settings.student_prefix || 'STU';
-  const nextNum = students.length + 1;
-  const studentCode = `I2B-${prefix}-${String(nextNum).padStart(3, '0')}`;
+  const studentCode = generateNextStudentCode(students, prefix);
 
   const newStudent: Student = {
     ...stu,
@@ -317,6 +333,91 @@ export async function createStudent(stu: Omit<Student, 'id' | 'student_id' | 'cr
   setLocal(LOCAL_STORAGE_KEYS.STUDENTS, students);
   await logAudit('create_student', 'students', newStudent.id, newStudent);
   return newStudent;
+}
+
+export interface ProgrammeEnrollmentInput {
+  programme_id: string;
+  class_or_grade: string;
+  board?: string | null;
+  agreed_fee: number;
+  start_date?: string;
+  fee_override?: boolean;
+  fee_override_reason?: string;
+  notes?: string;
+}
+
+export async function createStudentWithEnrollments(
+  studentInput: Omit<Student, 'id' | 'student_id' | 'created_at'>,
+  enrollmentsInput: ProgrammeEnrollmentInput[]
+): Promise<{ student: Student; enrollments: Enrollment[] }> {
+  // Validate duplicate active programmes
+  const progIds = enrollmentsInput.map(e => e.programme_id);
+  const uniqueProgIds = new Set(progIds);
+  if (progIds.length !== uniqueProgIds.size) {
+    throw new Error('A student cannot have multiple active enrolments in the same programme.');
+  }
+
+  const students = await getStudents();
+  const settings = await getSettings();
+  const prefix = settings.student_prefix || 'STU';
+  const studentCode = generateNextStudentCode(students, prefix);
+
+  const studentId = crypto.randomUUID();
+  const nowIso = new Date().toISOString();
+
+  const newStudent: Student = {
+    ...studentInput,
+    id: studentId,
+    student_id: studentCode,
+    created_at: nowIso,
+    updated_at: nowIso
+  };
+
+  const newEnrollments: Enrollment[] = enrollmentsInput.map(input => ({
+    id: crypto.randomUUID(),
+    student_id: studentId,
+    programme_id: input.programme_id,
+    class_or_grade: input.class_or_grade,
+    board: input.board || null,
+    agreed_fee: Number(input.agreed_fee) || 0,
+    start_date: input.start_date || nowIso.split('T')[0],
+    end_date: null,
+    status: 'active',
+    is_verified: true,
+    notes: input.fee_override_reason
+      ? `Fee override: ${input.fee_override_reason}${input.notes ? ' | ' + input.notes : ''}`
+      : (input.notes || null),
+    created_at: nowIso,
+    updated_at: nowIso
+  }));
+
+  const isOnline = await isSupabaseSchemaAvailable();
+  if (isOnline) {
+    const { error: stuErr } = await supabase.from('students').insert(newStudent);
+    if (stuErr) throw new Error(stuErr.message);
+    if (newEnrollments.length > 0) {
+      const { error: enrErr } = await supabase.from('enrollments').insert(newEnrollments);
+      if (enrErr) {
+        await supabase.from('students').delete().eq('id', studentId);
+        throw new Error(enrErr.message);
+      }
+    }
+  }
+
+  students.push(newStudent);
+  setLocal(LOCAL_STORAGE_KEYS.STUDENTS, students);
+
+  const allEnrols = getLocal<Enrollment[]>(LOCAL_STORAGE_KEYS.ENROLLMENTS, DEFAULT_ENROLLMENTS);
+  allEnrols.push(...newEnrollments);
+  setLocal(LOCAL_STORAGE_KEYS.ENROLLMENTS, allEnrols);
+
+  await logAudit('create_student_with_programmes', 'students', studentId, {
+    student: newStudent,
+    enrolmentCount: newEnrollments.length,
+    programmes: newEnrollments.map(e => ({ prog: e.programme_id, class: e.class_or_grade, fee: e.agreed_fee }))
+  });
+
+  return { student: newStudent, enrollments: newEnrollments };
 }
 
 export async function updateStudent(id: string, updates: Partial<Student>): Promise<Student> {
@@ -448,6 +549,120 @@ export async function promoteEnrollment(
   });
 
   return updated;
+}
+
+export const DEFAULT_ACADEMIC_YEARS: AcademicYear[] = [
+  {
+    id: 'ay-2025-2026',
+    year_name: '2025–2026',
+    start_date: '2025-06-01',
+    end_date: '2026-05-31',
+    is_active: false
+  },
+  {
+    id: 'ay-2026-2027',
+    year_name: '2026–2027',
+    start_date: '2026-06-01',
+    end_date: '2027-05-31',
+    is_active: true
+  },
+  {
+    id: 'ay-2027-2028',
+    year_name: '2027–2028',
+    start_date: '2027-06-01',
+    end_date: '2028-05-31',
+    is_active: false
+  }
+];
+
+export async function getAcademicYears(): Promise<AcademicYear[]> {
+  return getLocal<AcademicYear[]>(LOCAL_STORAGE_KEYS.ACADEMIC_YEARS, DEFAULT_ACADEMIC_YEARS);
+}
+
+export async function saveAcademicYear(year: AcademicYear): Promise<AcademicYear[]> {
+  const years = await getAcademicYears();
+  const idx = years.findIndex(y => y.id === year.id);
+  if (idx >= 0) {
+    years[idx] = year;
+  } else {
+    years.push(year);
+  }
+  setLocal(LOCAL_STORAGE_KEYS.ACADEMIC_YEARS, years);
+  await logAudit('save_academic_year', 'academic_years', year.id, year);
+  return years;
+}
+
+export async function setActiveAcademicYear(id: string): Promise<AcademicYear[]> {
+  const years = await getAcademicYears();
+  const updated = years.map(y => ({ ...y, is_active: y.id === id }));
+  setLocal(LOCAL_STORAGE_KEYS.ACADEMIC_YEARS, updated);
+  await logAudit('set_active_academic_year', 'academic_years', id, { activeId: id });
+  return updated;
+}
+
+export async function getClassPromotions(): Promise<ClassPromotionRecord[]> {
+  const list = getLocal<ClassPromotionRecord[]>(LOCAL_STORAGE_KEYS.PROMOTION_HISTORY, []);
+  const [students, programmes] = await Promise.all([getStudents(), getProgrammes()]);
+  const stuMap = new Map(students.map(s => [s.id, s]));
+  const progMap = new Map(programmes.map(p => [p.id, p]));
+  return list.map(item => ({
+    ...item,
+    student: item.student || stuMap.get(item.student_id),
+    programme: item.programme || (item.programme_id ? progMap.get(item.programme_id) : undefined)
+  })).sort((a, b) => new Date(b.created_at || b.effective_date).getTime() - new Date(a.created_at || a.effective_date).getTime());
+}
+
+export async function recordClassPromotion(record: Omit<ClassPromotionRecord, 'id' | 'created_at'>): Promise<ClassPromotionRecord> {
+  const newRecord: ClassPromotionRecord = {
+    ...record,
+    id: crypto.randomUUID(),
+    created_at: new Date().toISOString()
+  };
+
+  // Update enrollment with new class and fee snapshot
+  const allEnrols = await getEnrollments();
+  const enrIdx = allEnrols.findIndex(e => e.id === record.enrollment_id);
+  if (enrIdx >= 0) {
+    const promotionNote = `Promoted from ${record.old_class} (₹${record.old_fee}) to ${record.new_class} (₹${record.new_fee}) for ${record.academic_year}${record.notes ? ': ' + record.notes : ''}`;
+    allEnrols[enrIdx] = {
+      ...allEnrols[enrIdx],
+      class_or_grade: record.new_class,
+      board: record.new_board !== undefined ? record.new_board : allEnrols[enrIdx].board,
+      agreed_fee: record.new_fee,
+      notes: allEnrols[enrIdx].notes ? `${allEnrols[enrIdx].notes} | ${promotionNote}` : promotionNote,
+      updated_at: new Date().toISOString()
+    };
+    setLocal(LOCAL_STORAGE_KEYS.ENROLLMENTS, allEnrols);
+
+    const isOnline = await isSupabaseSchemaAvailable();
+    if (isOnline) {
+      await supabase.from('enrollments').update({
+        class_or_grade: record.new_class,
+        board: record.new_board !== undefined ? record.new_board : allEnrols[enrIdx].board,
+        agreed_fee: record.new_fee,
+        notes: allEnrols[enrIdx].notes
+      }).eq('id', record.enrollment_id);
+    }
+  }
+
+  // Save to promotion history
+  const history = getLocal<ClassPromotionRecord[]>(LOCAL_STORAGE_KEYS.PROMOTION_HISTORY, []);
+  history.unshift(newRecord);
+  setLocal(LOCAL_STORAGE_KEYS.PROMOTION_HISTORY, history);
+
+  await logAudit('record_class_promotion', 'promotions', newRecord.id, newRecord);
+  return newRecord;
+}
+
+export async function bulkPromoteEnrollments(
+  records: Array<Omit<ClassPromotionRecord, 'id' | 'created_at'>>
+): Promise<ClassPromotionRecord[]> {
+  const created: ClassPromotionRecord[] = [];
+  for (const rec of records) {
+    const res = await recordClassPromotion(rec);
+    created.push(res);
+  }
+  return created;
 }
 
 // ==============================================================================
