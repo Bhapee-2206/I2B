@@ -162,11 +162,16 @@ const Utils = {
     return `${prefix}-${ym}-${seq}`;
   },
 
-  // Generate Next Invoice Number (e.g. INV-202611-001)
-  getNextInvoiceNumber: (studentCode, month, year) => {
+  // Generate Next Invoice Number (e.g. INV-202611-0076)
+  getNextInvoiceNumber: (studentCode, month, year, seq = null) => {
     const prefix = AppState.institution?.invoice_prefix || 'INV';
     const ym = `${year}${String(month).padStart(2, '0')}`;
-    const code = studentCode ? studentCode.replace(/[^a-zA-Z0-9]/g, '').slice(-4) : Math.floor(100 + Math.random() * 900);
+    let code = studentCode ? studentCode.replace(/[^a-zA-Z0-9]/g, '').slice(-4) : '';
+    if (seq !== null) {
+      code = code ? `${code}-${String(seq).padStart(2, '0')}` : String(seq).padStart(4, '0');
+    } else {
+      code = code || Math.floor(1000 + Math.random() * 9000);
+    }
     return `${prefix}-${ym}-${code}`;
   },
 

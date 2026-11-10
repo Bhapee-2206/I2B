@@ -11,6 +11,15 @@
   
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Progressive Web App (PWA) Metadata -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/jpeg" href="assets/logo/logo.jpg">
   
   <style>
     html, body {
@@ -165,6 +174,12 @@
   <script src="js/auth.js"></script>
   <script>
     Utils.renderIcons();
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
 
     // Check if session already active and load active administrator ID
     document.addEventListener('DOMContentLoaded', async () => {

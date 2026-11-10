@@ -1,15 +1,78 @@
 /**
  * EDUTRACK MONTHLY FEES MODULE
- * Monthly Billing, Batch Invoice Generator & Status Tracking
+ * Monthly Billing, Batch Invoice Generator, PDF Generation & WhatsApp Billing
  */
 
 const MonthlyFeesModule = {
   selectedMonth: new Date().getMonth() + 1,
   selectedYear: new Date().getFullYear(),
+  currentInvoice: null,
 
   init: async () => {
     await MonthlyFeesModule.loadInvoices();
     MonthlyFeesModule.populateYearFilters();
+  },
+
+  // Load invoices from Supabase with joined students and invoice items (with resilient fallback)
+  loadInvoices: async () => {
+    try {
+      if (!supabaseClient) return [];
+      let data = null;
+      let error = null;
+
+      // 1. Try comprehensive joined query with invoice_items
+      try {
+        const res = await supabaseClient
+          .from('invoices')
+          .select(`
+            *,
+            students (*),
+            invoice_items (*)
+          `)
+          .order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      } catch (joinedEx) {
+        error = joinedEx;
+      }
+
+      // 2. Resilient fallback if joined table query fails
+      if (error || !data) {
+        console.warn("Retrying invoice load without joined items:", error);
+        const fallbackRes = await supabaseClient
+          .from('invoices')
+          .select(`
+            *,
+            students (*)
+          `)
+          .order('created_at', { ascending: false });
+        data = fallbackRes.data;
+      }
+
+      // 3. Synthesize fallback items from active student enrolments if invoice_items is empty
+      if (data) {
+        data.forEach(inv => {
+          if (!inv.invoice_items || inv.invoice_items.length === 0) {
+            const stu = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+            const activeEn = (stu?.enrollments || []).filter(e => e.status === 'active');
+            if (activeEn.length > 0) {
+              inv.invoice_items = activeEn.map(e => ({
+                id: e.id,
+                description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
+                amount: e.agreed_fee
+              }));
+            }
+          }
+        });
+      }
+
+      AppState.invoices = data || [];
+      return AppState.invoices;
+    } catch (err) {
+      console.error("Error loading invoices:", err);
+      Utils.showToast("Notice", "Failed to load invoices from database", "warning");
+      return [];
+    }
   },
 
   // Dynamically populate year & month filters for decade-long calendar support
@@ -18,7 +81,6 @@ const MonthlyFeesModule = {
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
 
-    // Collect all unique years from invoices, academic years, and current year +- 5
     const yearSet = new Set([curYear - 2, curYear - 1, curYear, curYear + 1, curYear + 2, curYear + 3, curYear + 4, curYear + 5]);
     (AppState.invoices || []).forEach(inv => {
       if (inv.billing_year) yearSet.add(inv.billing_year);
@@ -56,34 +118,11 @@ const MonthlyFeesModule = {
       genMonth.value = String(curMonth);
     }
 
-    // 5. Update header current cycle text
+    // 5. Update dynamic cycle text
     const cycleEls = document.querySelectorAll('.dynamic-current-cycle-text');
     cycleEls.forEach(el => {
       el.textContent = Utils.formatMonthYear(curMonth, curYear);
     });
-  },
-
-  // Load invoices from Supabase
-  loadInvoices: async () => {
-    try {
-      if (!supabaseClient) return [];
-      const { data, error } = await supabaseClient
-        .from('invoices')
-        .select(`
-          *,
-          students (*),
-          invoice_items (*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      AppState.invoices = data || [];
-      return AppState.invoices;
-    } catch (err) {
-      console.error("Error loading invoices:", err);
-      Utils.showToast("Error", "Failed to load monthly fee invoices", "error");
-      return [];
-    }
   },
 
   // Render Monthly Fees (Desktop Table & Mobile Cards)
@@ -96,12 +135,12 @@ const MonthlyFeesModule = {
     const year = parseInt(document.getElementById('monthly-fee-filter-year')?.value || MonthlyFeesModule.selectedYear, 10);
     const statusFilter = document.getElementById('monthly-fee-filter-status')?.value || '';
 
-    let list = AppState.invoices.filter(inv => inv.billing_month === month && inv.billing_year === year);
+    let list = (AppState.invoices || []).filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled');
     if (statusFilter) {
       list = list.filter(inv => inv.status === statusFilter);
     }
 
-    // Calculations
+    // Financial summary calculations
     const expected = list.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0);
     const collected = list.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
     const pending = list.reduce((sum, inv) => {
@@ -124,12 +163,12 @@ const MonthlyFeesModule = {
         <div class="empty-state">
           <i data-lucide="calendar" class="empty-state-icon"></i>
           <div class="empty-state-title">No invoices generated for ${Utils.formatMonthYear(month, year)}</div>
-          <div class="empty-state-text">Click "Generate Monthly Fees" to create fee records for all active students.</div>
+          <div class="empty-state-text">Click "Generate Monthly Invoices" to create fee records for all active students.</div>
           <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" onclick="MonthlyFeesModule.openGenerateModal()">
             <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Generate Invoices Now
           </button>
         </div>`;
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center">${emptyHtml}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center">${emptyHtml}</td></tr>`;
       if (mobileContainer) mobileContainer.innerHTML = emptyHtml;
       Utils.renderIcons();
       return;
@@ -138,8 +177,19 @@ const MonthlyFeesModule = {
     // 1. Desktop Table
     if (tbody) {
       tbody.innerHTML = list.map(inv => {
-        const student = inv.students;
-        const progNames = (inv.invoice_items || []).map(item => item.description).join(', ') || 'Tuition Fee';
+        const student = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+        const items = inv.invoice_items && inv.invoice_items.length > 0
+          ? inv.invoice_items
+          : ((student?.enrollments || []).filter(e => e.status === 'active').map(e => ({
+              description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade})`,
+              amount: e.agreed_fee
+            })));
+
+        const progNames = items.map(item => item.description).join(', ') || 'Tuition Fee';
+        const total = parseFloat(inv.total_amount) || 0;
+        const paid = parseFloat(inv.paid_amount) || 0;
+        const isPaid = inv.status === 'paid' || (total - paid) <= 0;
+        const balanceDue = isPaid ? 0 : Math.max(0, total - paid);
 
         return `
           <tr>
@@ -149,27 +199,31 @@ const MonthlyFeesModule = {
               <div style="font-size: 0.75rem; color: var(--text-muted);">${Utils.escapeHtml(student?.student_id || '')}</div>
             </td>
             <td><span style="font-size: 0.8rem; color: var(--text-muted);">${Utils.escapeHtml(progNames)}</span></td>
-            <td><strong>${Utils.formatCurrency(inv.total_amount)}</strong></td>
-            <td><span style="color: var(--status-paid); font-weight: 600;">${Utils.formatCurrency(inv.paid_amount)}</span></td>
+            <td><strong>${Utils.formatCurrency(total)}</strong></td>
+            <td><span style="color: var(--status-paid); font-weight: 600;">${Utils.formatCurrency(paid)}</span></td>
             <td>
-              <strong style="color: ${(inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0) ? 'var(--status-paid)' : 'var(--status-unpaid)'};">
-                ${Utils.formatCurrency(inv.status === 'paid' ? 0 : Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))}
+              <strong style="color: ${isPaid ? 'var(--status-paid)' : 'var(--status-unpaid)'};">
+                ${Utils.formatCurrency(balanceDue)}
               </strong>
             </td>
             <td>
-              <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
+              <span class="badge ${isPaid ? 'badge-paid' : (paid > 0 ? 'badge-partial' : 'badge-unpaid')}">
                 <span class="badge-dot"></span>
-                ${inv.status}
+                ${isPaid ? 'paid' : (paid > 0 ? 'partially_paid' : 'unpaid')}
               </span>
             </td>
             <td class="actions-cell">
-              ${(inv.status !== 'paid' && (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0) ? `
-                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
+              <button class="btn btn-secondary btn-sm" onclick="MonthlyFeesModule.viewInvoice('${inv.id}')" title="View & Print Invoice">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> Invoice
+              </button>
+              <button class="btn btn-success btn-sm" onclick="MonthlyFeesModule.shareInvoiceViaWhatsApp('${inv.id}')" title="Send Invoice via WhatsApp">
+                <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+              </button>
+              ${!isPaid ? `
+                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')" title="Collect Fee">
                   <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
                 </button>
-              ` : `
-                <span style="font-size: 0.78rem; color: var(--status-paid); font-weight: 600;">Settled</span>
-              `}
+              ` : ''}
             </td>
           </tr>
         `;
@@ -179,7 +233,12 @@ const MonthlyFeesModule = {
     // 2. Mobile Cards
     if (mobileContainer) {
       mobileContainer.innerHTML = list.map(inv => {
-        const student = inv.students;
+        const student = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+        const total = parseFloat(inv.total_amount) || 0;
+        const paid = parseFloat(inv.paid_amount) || 0;
+        const isPaid = inv.status === 'paid' || (total - paid) <= 0;
+        const balanceDue = isPaid ? 0 : Math.max(0, total - paid);
+
         return `
           <div class="student-mobile-card">
             <div class="student-card-top">
@@ -187,23 +246,29 @@ const MonthlyFeesModule = {
                 <div class="student-card-name">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
                 <div class="student-card-parent">${Utils.escapeHtml(inv.invoice_number)} • Due: ${Utils.formatDate(inv.due_date)}</div>
               </div>
-              <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
-                ${inv.status}
+              <span class="badge ${isPaid ? 'badge-paid' : (paid > 0 ? 'badge-partial' : 'badge-unpaid')}">
+                ${isPaid ? 'paid' : (paid > 0 ? 'partially_paid' : 'unpaid')}
               </span>
             </div>
 
             <div class="student-card-financials">
-              <div>Total: <strong>${Utils.formatCurrency(inv.total_amount)}</strong></div>
-              <div>Pending: <strong style="color: ${(inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0) ? 'var(--status-paid)' : 'var(--status-unpaid)'};">${Utils.formatCurrency(inv.status === 'paid' ? 0 : Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))}</strong></div>
+              <div>Total: <strong>${Utils.formatCurrency(total)}</strong></div>
+              <div>Pending: <strong style="color: ${isPaid ? 'var(--status-paid)' : 'var(--status-unpaid)'};">${Utils.formatCurrency(balanceDue)}</strong></div>
             </div>
 
-            ${(inv.status !== 'paid' && (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0) ? `
-              <div class="student-card-actions">
+            <div class="student-card-actions" style="margin-top: 0.75rem;">
+              <button class="btn btn-secondary btn-sm" onclick="MonthlyFeesModule.viewInvoice('${inv.id}')">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> Invoice
+              </button>
+              <button class="btn btn-success btn-sm" onclick="MonthlyFeesModule.shareInvoiceViaWhatsApp('${inv.id}')">
+                <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+              </button>
+              ${!isPaid ? `
                 <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
-                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Due (${Utils.formatCurrency(Math.max(0, (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0)))})
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Due (${Utils.formatCurrency(balanceDue)})
                 </button>
-              </div>
-            ` : ''}
+              ` : ''}
+            </div>
           </div>
         `;
       }).join('');
@@ -230,11 +295,11 @@ const MonthlyFeesModule = {
     const month = parseInt(document.getElementById('gen-month-select').value, 10);
     const year = parseInt(document.getElementById('gen-year-select').value, 10);
 
-    const activeStudents = AppState.students.filter(s => s.status === 'active');
+    const activeStudents = (AppState.students || []).filter(s => s.status === 'active');
     
     // Check existing invoices for this month/year (duplicate prevention)
     const existingStudentIds = new Set(
-      AppState.invoices
+      (AppState.invoices || [])
         .filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled')
         .map(inv => inv.student_id)
     );
@@ -242,9 +307,13 @@ const MonthlyFeesModule = {
     const eligibleStudents = activeStudents.filter(s => !existingStudentIds.has(s.id));
     const estimatedTotal = eligibleStudents.reduce((sum, s) => sum + StudentsModule.calculateMonthlyFee(s), 0);
 
-    document.getElementById('gen-preview-eligible-count').textContent = eligibleStudents.length;
-    document.getElementById('gen-preview-existing-count').textContent = existingStudentIds.size;
-    document.getElementById('gen-preview-total-amount').textContent = Utils.formatCurrency(estimatedTotal);
+    const elCount = document.getElementById('gen-preview-eligible-count');
+    const exCount = document.getElementById('gen-preview-existing-count');
+    const totAmount = document.getElementById('gen-preview-total-amount');
+
+    if (elCount) elCount.textContent = eligibleStudents.length;
+    if (exCount) exCount.textContent = existingStudentIds.size;
+    if (totAmount) totAmount.textContent = Utils.formatCurrency(estimatedTotal);
   },
 
   // Execute Batch Invoice Generation
@@ -252,9 +321,9 @@ const MonthlyFeesModule = {
     const month = parseInt(document.getElementById('gen-month-select').value, 10);
     const year = parseInt(document.getElementById('gen-year-select').value, 10);
 
-    const activeStudents = AppState.students.filter(s => s.status === 'active');
+    const activeStudents = (AppState.students || []).filter(s => s.status === 'active');
     const existingStudentIds = new Set(
-      AppState.invoices
+      (AppState.invoices || [])
         .filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled')
         .map(inv => inv.student_id)
     );
@@ -274,15 +343,19 @@ const MonthlyFeesModule = {
 
       let createdCount = 0;
 
-      for (const student of eligibleStudents) {
+      for (let i = 0; i < eligibleStudents.length; i++) {
+        const student = eligibleStudents[i];
         const activeEnrollments = (student.enrollments || []).filter(e => e.status === 'active');
         if (activeEnrollments.length === 0) continue;
 
         const totalFee = activeEnrollments.reduce((sum, e) => sum + (parseFloat(e.agreed_fee) || 0), 0);
         if (totalFee <= 0) continue;
 
+        // Generate unique sequential invoice number
+        const invNumber = Utils.getNextInvoiceNumber(student.student_id, month, year, i + 1);
+
         const invPayload = {
-          invoice_number: Utils.getNextInvoiceNumber(student.student_id, month, year),
+          invoice_number: invNumber,
           student_id: student.id,
           billing_month: month,
           billing_year: year,
@@ -295,28 +368,39 @@ const MonthlyFeesModule = {
           notes: `Batch monthly invoice for ${Utils.formatMonthYear(month, year)}`
         };
 
-        const { data: inv, error: invErr } = await supabaseClient
-          .from('invoices')
-          .insert([invPayload])
-          .select();
+        let createdInv = null;
+        try {
+          const { data: inv, error: invErr } = await supabaseClient
+            .from('invoices')
+            .insert([invPayload])
+            .select();
 
-        if (invErr) {
-          console.error("Error creating invoice for", student.name, invErr);
-          continue;
+          if (!invErr && inv && inv[0]) {
+            createdInv = inv[0];
+          } else if (invErr) {
+            // Collision retry with timestamp suffix
+            const retryPayload = { ...invPayload, invoice_number: `${invNumber}-${Math.floor(100 + Math.random() * 900)}` };
+            const { data: retryInv } = await supabaseClient.from('invoices').insert([retryPayload]).select();
+            if (retryInv && retryInv[0]) createdInv = retryInv[0];
+          }
+        } catch (e) {
+          console.warn("Invoice insert notice:", e);
         }
 
-        if (inv && inv[0]) {
+        if (createdInv) {
+          createdCount++;
           const items = activeEnrollments.map(e => ({
-            invoice_id: inv[0].id,
+            invoice_id: createdInv.id,
             enrollment_id: e.id,
             programme_id: e.programme_id,
             class_or_grade: e.class_or_grade,
-            description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade})`,
+            description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
             amount: e.agreed_fee
           }));
 
-          await supabaseClient.from('invoice_items').insert(items);
-          createdCount++;
+          try {
+            await supabaseClient.from('invoice_items').insert(items);
+          } catch (_) {}
         }
       }
 
@@ -327,11 +411,339 @@ const MonthlyFeesModule = {
       await MonthlyFeesModule.loadInvoices();
       await StudentsModule.loadStudents();
       MonthlyFeesModule.renderMonthlyFeesTable();
+      if (typeof DashboardModule !== 'undefined' && DashboardModule.updateMetrics) {
+        DashboardModule.updateMetrics();
+        DashboardModule.renderOutstandingStudentsList();
+      }
 
     } catch (err) {
       console.error("Generate invoices error:", err);
       Utils.showToast("Error", "Failed to generate monthly fee invoices", "error");
     }
+  },
+
+  // View Comprehensive Fee Invoice in Modal
+  viewInvoice: async (invoiceId) => {
+    let inv = (AppState.invoices || []).find(i => i.id === invoiceId);
+    if (!inv && supabaseClient) {
+      try {
+        const { data } = await supabaseClient
+          .from('invoices')
+          .select(`*, students (*), invoice_items (*)`)
+          .eq('id', invoiceId)
+          .single();
+        inv = data;
+      } catch (_) {}
+    }
+
+    if (!inv) {
+      Utils.showToast("Notice", "Invoice record not found", "warning");
+      return;
+    }
+
+    MonthlyFeesModule.currentInvoice = inv;
+    const student = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+    const inst = AppState.institution;
+
+    document.getElementById('invoice-view-number').textContent = inv.invoice_number;
+    document.getElementById('invoice-institution-name').textContent = inst?.institution_name || 'I2B Educational Institution';
+    document.getElementById('invoice-institution-address').textContent = `Contact: ${inst?.contact_phone || '+91 6385577966 / +91 9345999260'} • ${inst?.contact_email || 'i2btutioncentre@gmail.com'}`;
+
+    document.getElementById('invoice-detail-no').textContent = inv.invoice_number;
+    document.getElementById('invoice-detail-cycle').textContent = Utils.formatMonthYear(inv.billing_month, inv.billing_year);
+    document.getElementById('invoice-detail-student').textContent = student?.name || '—';
+    document.getElementById('invoice-detail-id').textContent = student?.student_id || '—';
+    document.getElementById('invoice-detail-phone').textContent = student?.whatsapp_number || 'Not provided';
+    document.getElementById('invoice-detail-due').textContent = Utils.formatDate(inv.due_date);
+
+    // Items table
+    const items = inv.invoice_items && inv.invoice_items.length > 0
+      ? inv.invoice_items
+      : ((student?.enrollments || []).filter(e => e.status === 'active').map(e => ({
+          description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
+          amount: e.agreed_fee
+        })));
+
+    const itemsTbody = document.getElementById('invoice-items-table-body');
+    if (itemsTbody) {
+      if (items.length === 0) {
+        itemsTbody.innerHTML = `<tr><td>Tuition Fee (${inv.billing_month}/${inv.billing_year})</td><td style="text-align: right; font-weight: 600;">${Utils.formatCurrency(inv.total_amount)}</td></tr>`;
+      } else {
+        itemsTbody.innerHTML = items.map(it => `
+          <tr>
+            <td><strong>${Utils.escapeHtml(it.description)}</strong></td>
+            <td style="text-align: right; font-weight: 600;">${Utils.formatCurrency(it.amount)}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    const total = parseFloat(inv.total_amount) || 0;
+    const paid = parseFloat(inv.paid_amount) || 0;
+    const isPaid = inv.status === 'paid' || (total - paid) <= 0;
+    const balanceDue = isPaid ? 0 : Math.max(0, total - paid);
+
+    document.getElementById('invoice-total-display').textContent = Utils.formatCurrency(total);
+    document.getElementById('invoice-paid-display').textContent = Utils.formatCurrency(paid);
+    document.getElementById('invoice-balance-display').textContent = Utils.formatCurrency(balanceDue);
+
+    const badge = document.getElementById('invoice-status-badge');
+    if (badge) {
+      badge.className = `badge ${isPaid ? 'badge-paid' : (paid > 0 ? 'badge-partial' : 'badge-unpaid')}`;
+      badge.textContent = isPaid ? 'PAID' : (paid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+    }
+
+    const collectBtn = document.getElementById('btn-invoice-modal-collect');
+    if (collectBtn) {
+      collectBtn.style.display = isPaid ? 'none' : 'inline-flex';
+    }
+
+    Utils.openModal('modal-view-invoice');
+  },
+
+  // Collect fee directly from invoice modal
+  collectFromInvoiceModal: () => {
+    const inv = MonthlyFeesModule.currentInvoice;
+    if (inv) {
+      Utils.closeModal('modal-view-invoice');
+      PaymentsModule.openRecordPaymentModal(inv.student_id, inv.id);
+    }
+  },
+
+  // Generate jsPDF instance for an invoice
+  createInvoicePDF: (inv) => {
+    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+      throw new Error("jsPDF library is not loaded");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a5'
+    });
+
+    const inst = AppState.institution;
+    const student = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+
+    // Header Banner
+    doc.setFillColor(15, 23, 42); // Navy
+    doc.rect(0, 0, 148, 28, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(inst?.institution_name || "I2B EDUCATIONAL INSTITUTION", 14, 11);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(inst?.subtitle || "Student & Monthly Tuition Fee Management", 14, 17);
+    const phone = inst?.contact_phone || '+91 6385577966 / +91 9345999260';
+    const email = inst?.contact_email || 'i2btutioncentre@gmail.com';
+    doc.text(`Phone: ${phone} | Email: ${email}`, 14, 22);
+
+    // Invoice Subheader Box
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14, 32, 120, 13, 2, 2, 'F');
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text("TUITION FEE INVOICE", 18, 40);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Invoice #: ${inv.invoice_number}`, 75, 38);
+    doc.text(`Billing: ${Utils.formatMonthYear(inv.billing_month, inv.billing_year)}`, 75, 43);
+
+    // Student & Due Details
+    doc.setFontSize(8.5);
+    doc.text("Student ID:", 14, 53);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${student?.student_id || '—'}`, 38, 53);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Student Name:", 14, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${student?.name || '—'}`, 38, 59);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Parent / Phone:", 75, 53);
+    doc.text(`${student?.whatsapp_number || '—'}`, 98, 53);
+
+    doc.text("Due Date:", 75, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${Utils.formatDate(inv.due_date)}`, 98, 59);
+
+    doc.line(14, 64, 134, 64);
+
+    // Items Table Header
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text("Fee Particulars", 14, 71);
+    doc.text("Amount (INR)", 110, 71);
+    doc.line(14, 73, 134, 73);
+
+    // Items list
+    const items = inv.invoice_items && inv.invoice_items.length > 0
+      ? inv.invoice_items
+      : ((student?.enrollments || []).filter(e => e.status === 'active').map(e => ({
+          description: `${e.programmes?.name || 'Tuition'} (${e.class_or_grade}${e.board ? ' · ' + e.board : ''})`,
+          amount: e.agreed_fee
+        })));
+
+    let curY = 80;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+
+    if (items.length === 0) {
+      doc.text(`Monthly Tuition Fee (${inv.billing_month}/${inv.billing_year})`, 14, curY);
+      doc.text(`Rs. ${(parseFloat(inv.total_amount) || 0).toFixed(2)}`, 112, curY);
+      curY += 7;
+    } else {
+      items.forEach(it => {
+        doc.text(it.description || 'Tuition', 14, curY);
+        doc.text(`Rs. ${(parseFloat(it.amount) || 0).toFixed(2)}`, 112, curY);
+        curY += 7;
+      });
+    }
+
+    doc.line(14, curY, 134, curY);
+    curY += 6;
+
+    // Financial Totals Box
+    const total = parseFloat(inv.total_amount) || 0;
+    const paid = parseFloat(inv.paid_amount) || 0;
+    const isPaid = inv.status === 'paid' || (total - paid) <= 0;
+    const balanceDue = isPaid ? 0 : Math.max(0, total - paid);
+
+    doc.setFontSize(8.5);
+    doc.text("Total Amount:", 75, curY);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Rs. ${total.toFixed(2)}`, 110, curY);
+    curY += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Amount Paid:", 75, curY);
+    doc.text(`Rs. ${paid.toFixed(2)}`, 110, curY);
+    curY += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(isPaid ? 16 : 220, isPaid ? 185 : 38, isPaid ? 129 : 38);
+    doc.text("Balance Due:", 75, curY);
+    doc.text(`Rs. ${balanceDue.toFixed(2)}`, 110, curY);
+    doc.setTextColor(15, 23, 42);
+    curY += 12;
+
+    // Footer info
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text("Accepted Modes: UPI / Cash. Please quote invoice number when paying.", 14, curY);
+    doc.text("This is an official computer-generated fee invoice.", 14, curY + 5);
+
+    // Signatory
+    doc.text("Authorized Signatory", 100, curY + 14);
+    doc.line(95, curY + 10, 134, curY + 10);
+
+    const filename = `Invoice_${inv.invoice_number}.pdf`;
+    return { doc, filename };
+  },
+
+  // Download Invoice as PDF
+  downloadInvoicePDF: () => {
+    const inv = MonthlyFeesModule.currentInvoice;
+    if (!inv) return;
+
+    try {
+      const { doc, filename } = MonthlyFeesModule.createInvoicePDF(inv);
+      doc.save(filename);
+      Utils.showToast("Invoice Downloaded", `Invoice ${inv.invoice_number} saved as PDF`, "success");
+    } catch (e) {
+      console.error("Invoice PDF generation error:", e);
+      Utils.showToast("Notice", "Failed to generate PDF. Use Print instead.", "warning");
+    }
+  },
+
+  // Print Invoice directly
+  printInvoice: () => {
+    window.print();
+  },
+
+  // Share Invoice via WhatsApp
+  shareInvoiceViaWhatsApp: async (invoiceId = null) => {
+    let inv = MonthlyFeesModule.currentInvoice;
+    if (invoiceId && (!inv || inv.id !== invoiceId)) {
+      inv = (AppState.invoices || []).find(i => i.id === invoiceId);
+    }
+    if (!inv) {
+      Utils.showToast("Notice", "Invoice not found", "warning");
+      return;
+    }
+
+    MonthlyFeesModule.currentInvoice = inv;
+    const student = (AppState.students || []).find(s => s.id === inv.student_id) || inv.students;
+    const inst = AppState.institution;
+    const orgName = inst?.institution_name || "I2B Educational Institution";
+
+    const studentName = student?.name || 'Student';
+    const studentId = student?.student_id || 'STU';
+    const invNo = inv.invoice_number;
+    const cycle = Utils.formatMonthYear(inv.billing_month, inv.billing_year);
+    const dueDate = Utils.formatDate(inv.due_date);
+    const total = (parseFloat(inv.total_amount) || 0).toFixed(2);
+    const paid = (parseFloat(inv.paid_amount) || 0).toFixed(2);
+    const isPaid = inv.status === 'paid' || (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) <= 0;
+    const due = isPaid ? '0.00' : Math.max(0, parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)).toFixed(2);
+    const statusText = isPaid ? 'PAID' : (parseFloat(paid) > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+
+    const msg = `*${orgName}*
+*Tuition Fee Invoice Confirmation*
+
+Dear Parent / Student,
+Please find fee invoice details for *${studentName}* (ID: ${studentId}) for *${cycle}*.
+
+*Invoice No:* ${invNo}
+*Billing Cycle:* ${cycle}
+*Due Date:* ${dueDate}
+*Total Amount:* Rs. ${total}
+*Amount Paid:* Rs. ${paid}
+*Outstanding Due:* Rs. ${due}
+*Payment Status:* ${statusText}
+
+Payment can be made via UPI or Cash at the tuition centre.
+For queries, contact: +91 6385577966  OR +91 9345999260
+Email: i2btutioncentre@gmail.com
+
+Thank you! This is an official computer-generated fee invoice.`;
+
+    const rawPhone = (student?.whatsapp_number || '').trim();
+
+    // 1. Direct send if student has registered WhatsApp number
+    if (rawPhone) {
+      const waUrl = Utils.buildWhatsAppUrl(rawPhone, msg);
+      window.open(waUrl, '_blank');
+      Utils.showToast("WhatsApp Opened", `Sending invoice directly to ${studentName} (${rawPhone})`, "success", 4000);
+      return;
+    }
+
+    // 2. Web Share API fallback if supported
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Invoice - ${studentName} (${invNo})`,
+          text: msg
+        });
+        Utils.showToast("Sharing Menu Opened", "Select parent contact to send invoice", "info", 5000);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    // 3. Desktop manual fallback
+    const waUrlManual = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(waUrlManual, '_blank');
+    Utils.showToast("WhatsApp Opened", "No phone number on profile. Please select parent chat manually.", "warning", 5000);
   }
 };
 

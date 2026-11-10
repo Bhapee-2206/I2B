@@ -21,6 +21,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Progressive Web App (PWA) & Mobile Download Metadata -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EduTrack">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/jpeg" href="assets/logo/logo.jpg">
 </head>
 <body>
 
@@ -516,6 +526,7 @@
                       <th>Paid Amount</th>
                       <th>Pending Balance</th>
                       <th>Status</th>
+                      <th style="text-align: right;">Action</th>
                     </tr>
                   </thead>
                   <tbody id="profile-invoices-body">
@@ -1864,6 +1875,144 @@
           <button type="submit" class="btn btn-primary">Create Academic Year</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- VIEW INVOICE MODAL -->
+  <div class="modal-overlay" id="modal-view-invoice">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Tuition Fee Invoice</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);" id="invoice-view-number">INV-000000-0000</div>
+        </div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-view-invoice')">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" id="invoice-printable-area">
+        <div style="text-align: center; border-bottom: 2px solid var(--border-light); padding-bottom: 0.85rem; margin-bottom: 1rem;">
+          <h2 style="font-size: 1.25rem; font-weight: 800;" id="invoice-institution-name">I2B Educational Institution</h2>
+          <div style="font-size: 0.78rem; color: var(--text-muted);" id="invoice-institution-address">Contact: +91 6385577966 / +91 9345999260 • i2btutioncentre@gmail.com</div>
+          <div style="display: inline-block; background: var(--accent-light); color: var(--accent-blue); font-weight: 700; font-size: 0.74rem; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); margin-top: 0.4rem;">
+            OFFICIAL FEE INVOICE
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.82rem; margin-bottom: 1.25rem; background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+          <div>
+            <div class="text-muted">Invoice No:</div>
+            <strong id="invoice-detail-no">—</strong>
+          </div>
+          <div>
+            <div class="text-muted">Billing Cycle:</div>
+            <strong id="invoice-detail-cycle">—</strong>
+          </div>
+          <div>
+            <div class="text-muted">Student Name:</div>
+            <strong id="invoice-detail-student">—</strong>
+          </div>
+          <div>
+            <div class="text-muted">Student ID:</div>
+            <strong id="invoice-detail-id">—</strong>
+          </div>
+          <div>
+            <div class="text-muted">Parent / WhatsApp:</div>
+            <strong id="invoice-detail-phone">—</strong>
+          </div>
+          <div>
+            <div class="text-muted">Due Date:</div>
+            <strong id="invoice-detail-due">—</strong>
+          </div>
+        </div>
+
+        <!-- Enrolled Programmes Breakdown Table -->
+        <div style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--text-main);">
+          Fee Particulars:
+        </div>
+        <table class="data-table" style="margin-bottom: 1.25rem;">
+          <thead>
+            <tr>
+              <th>Description / Programme</th>
+              <th style="text-align: right;">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-items-table-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+
+        <!-- Totals & Balances -->
+        <div style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.4rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-muted">Total Invoice Amount:</span>
+            <strong id="invoice-total-display">₹0</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-muted">Amount Paid:</span>
+            <span style="color: var(--status-paid); font-weight: 600;" id="invoice-paid-display">₹0</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-light); padding-top: 0.4rem; font-size: 1.05rem;">
+            <span>Outstanding Pending Balance:</span>
+            <strong style="color: var(--status-unpaid);" id="invoice-balance-display">₹0</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+            <span class="text-muted">Payment Status:</span>
+            <span id="invoice-status-badge" class="badge badge-unpaid">UNPAID</span>
+          </div>
+        </div>
+
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">
+          Accepted payment methods: UPI / Cash at tuition centre. This is an official computer-generated fee invoice.
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <button type="button" class="btn btn-primary" id="btn-invoice-modal-collect" onclick="MonthlyFeesModule.collectFromInvoiceModal()">
+            <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
+          </button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" onclick="MonthlyFeesModule.printInvoice()">
+            <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Print
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="MonthlyFeesModule.downloadInvoicePDF()">
+            <i data-lucide="download" style="width: 14px; height: 14px;"></i> PDF
+          </button>
+          <button type="button" class="btn btn-success" onclick="MonthlyFeesModule.shareInvoiceViaWhatsApp()">
+            <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IOS PWA INSTALL INSTRUCTION MODAL -->
+  <div class="modal-overlay" id="modal-ios-install">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">Download EduTrack on iOS</div>
+        <button class="modal-close-btn" onclick="Utils.closeModal('modal-ios-install')">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="text-align: center; padding: 1.5rem 1rem;">
+        <img src="assets/logo/logo.jpg" style="width: 64px; height: 64px; border-radius: 14px; margin-bottom: 1rem; box-shadow: var(--shadow-subtle);">
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Install on iPhone or iPad</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
+          You can download and run EduTrack as a standalone full-screen application on your Apple device:
+        </p>
+        <div style="text-align: left; background: var(--surface-subtle); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 1rem; font-size: 0.85rem; line-height: 1.6;">
+          <div style="margin-bottom: 0.5rem;">1. Tap the <strong>Share</strong> button at the bottom of Safari (<span style="font-size: 1.1rem;">⎋</span>).</div>
+          <div style="margin-bottom: 0.5rem;">2. Scroll down and tap <strong>"Add to Home Screen"</strong> (➕).</div>
+          <div>3. Tap <strong>"Add"</strong> in the top right corner.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="Utils.closeModal('modal-ios-install')" style="width: 100%;">Got It</button>
+      </div>
     </div>
   </div>
 

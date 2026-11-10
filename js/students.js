@@ -973,7 +973,7 @@ const StudentsModule = {
     if (invoicesBody) {
       const invs = s.invoices || [];
       if (invs.length === 0) {
-        invoicesBody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 1.5rem; color: var(--text-muted);">No invoices generated yet.</td></tr>`;
+        invoicesBody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding: 1.5rem; color: var(--text-muted);">No invoices generated yet.</td></tr>`;
       } else {
         invoicesBody.innerHTML = invs.map(inv => `
           <tr>
@@ -986,6 +986,14 @@ const StudentsModule = {
               <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
                 ${inv.status}
               </span>
+            </td>
+            <td class="actions-cell">
+              <button class="btn btn-secondary btn-sm" onclick="MonthlyFeesModule.viewInvoice('${inv.id}')" title="View & Print">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View
+              </button>
+              <button class="btn btn-success btn-sm" onclick="MonthlyFeesModule.shareInvoiceViaWhatsApp('${inv.id}')" title="WhatsApp">
+                <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i>
+              </button>
             </td>
           </tr>
         `).join('');

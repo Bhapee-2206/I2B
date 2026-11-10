@@ -29,6 +29,7 @@ const App = {
 
       // 5. Setup DOM Listeners (Desktop & Mobile Bottom Nav)
       App.setupEventListeners();
+      App.initPWA();
 
       // 6. Navigate to initial route
       const initialRoute = window.location.hash.replace('#', '') || 'dashboard';
@@ -84,6 +85,67 @@ const App = {
     window.addEventListener('offline', () => {
       Utils.showToast("Offline Mode", "Network disconnected. Working in offline view.", "warning", 6000);
     });
+  },
+
+  deferredInstallPrompt: null,
+
+  // Initialize Progressive Web App (PWA) & Service Worker
+  initPWA: () => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+          .catch(err => console.warn('[PWA] Service Worker registration notice:', err));
+      });
+    }
+
+    // Capture install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      App.deferredInstallPrompt = e;
+      console.log('[PWA] beforeinstallprompt captured');
+      const headerBtn = document.getElementById('btn-header-install-pwa');
+      if (headerBtn) headerBtn.style.display = 'inline-flex';
+      const sideBtn = document.getElementById('btn-sidebar-install-pwa');
+      if (sideBtn) sideBtn.style.display = 'inline-flex';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      App.deferredInstallPrompt = null;
+      Utils.showToast("App Downloaded", "EduTrack has been downloaded and installed on your device!", "success", 5000);
+      const headerBtn = document.getElementById('btn-header-install-pwa');
+      if (headerBtn) headerBtn.style.display = 'none';
+      const sideBtn = document.getElementById('btn-sidebar-install-pwa');
+      if (sideBtn) sideBtn.style.display = 'none';
+    });
+  },
+
+  // Trigger PWA installation prompt
+  triggerPWAInstall: async () => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+      Utils.showToast("Installed", "EduTrack is already installed and running as a standalone app.", "info");
+      return;
+    }
+
+    if (App.deferredInstallPrompt) {
+      App.deferredInstallPrompt.prompt();
+      const { outcome } = await App.deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') {
+        Utils.showToast("Downloading", "EduTrack app is downloading to your device...", "success", 4000);
+      }
+      App.deferredInstallPrompt = null;
+      return;
+    }
+
+    // iOS Safari
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      Utils.openModal('modal-ios-install');
+      return;
+    }
+
+    Utils.showToast("Download App", "To download on your device: open browser menu (⋮) and select 'Install App' or 'Add to Home Screen'.", "info", 6000);
   },
 
   // Reload all stores when reconnecting or after batch updates
