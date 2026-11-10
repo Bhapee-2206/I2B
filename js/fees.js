@@ -1,6 +1,6 @@
 /**
  * EDUTRACK FEE STRUCTURE MODULE
- * Dynamic Fee lookup, Fee Matrix Management & Validation
+ * Strict Exact Matching Lookup & Fee Matrix Management
  */
 
 const FeesModule = {
@@ -27,43 +27,42 @@ const FeesModule = {
     }
   },
 
-  // Normalize class string for robust matching:
-  // e.g. "5th" -> "5", "5.0" -> "5", "1st" -> "1", "Basic" -> "basic"
+  // Normalize grade string for consistent comparison (e.g. "5th", "5", "5.0")
   normalizeGrade: (val) => {
     if (!val) return '';
-    const s = String(val).trim().toLowerCase();
-    const cleanNum = s.replace(/st|nd|rd|th|\.0$/g, '');
-    return cleanNum;
+    return String(val).trim().toLowerCase().replace(/st|nd|rd|th|\.0$/g, '');
   },
 
-  // Lookup fee automatically from the database records
+  // EXACT MATCHING LOOKUP (Strictly no silent fallback to wrong boards!)
   lookupFee: (programmeId, classOrGrade, board = null) => {
     if (!programmeId || !classOrGrade) return null;
 
-    const normTarget = FeesModule.normalizeGrade(classOrGrade);
+    const normGrade = FeesModule.normalizeGrade(classOrGrade);
     const normBoard = (board || '').trim().toLowerCase();
 
-    // 1. Try exact programme + class + board match
-    const match = AppState.feeStructures.find(fs => {
+    // Exact lookup matching programme + normalized grade + board
+    const exactMatch = AppState.feeStructures.find(fs => {
       if (!fs.is_active || fs.programme_id !== programmeId) return false;
-      const fsNorm = FeesModule.normalizeGrade(fs.class_or_grade);
-      if (fsNorm !== normTarget && fs.class_or_grade.toLowerCase() !== classOrGrade.toLowerCase()) return false;
-      if (normBoard && fs.board) {
-        return fs.board.toLowerCase() === normBoard;
+      
+      const fsGrade = FeesModule.normalizeGrade(fs.class_or_grade);
+      const gradeMatches = (fsGrade === normGrade || fs.class_or_grade.toLowerCase() === classOrGrade.toLowerCase());
+      if (!gradeMatches) return false;
+
+      // If board is provided, must match board exactly
+      if (normBoard) {
+        return fs.board && fs.board.toLowerCase() === normBoard;
+      } else {
+        // If no board requested, matches if fs has no board or is universal
+        return !fs.board;
       }
-      return true;
     });
 
-    if (match) return match.monthly_fee;
+    if (exactMatch) {
+      return exactMatch.monthly_fee;
+    }
 
-    // 2. If no direct board match, try any active fee for this programme and class
-    const fallback = AppState.feeStructures.find(fs => {
-      if (!fs.is_active || fs.programme_id !== programmeId) return false;
-      const fsNorm = FeesModule.normalizeGrade(fs.class_or_grade);
-      return fsNorm === normTarget || fs.class_or_grade.toLowerCase() === classOrGrade.toLowerCase();
-    });
-
-    return fallback ? fallback.monthly_fee : null;
+    // Return null if no exact matching rule exists
+    return null;
   },
 
   // Render the fee structure page table
@@ -80,7 +79,7 @@ const FeesModule = {
       tbody.innerHTML = `
         <tr>
           <td colspan="6" class="text-center" style="padding: 2.5rem; color: var(--text-muted);">
-            No fee structure rules configured yet.
+            No fee structure rules configured for this selection.
           </td>
         </tr>`;
       return;
@@ -92,10 +91,10 @@ const FeesModule = {
         <tr>
           <td><span class="badge badge-info">${Utils.escapeHtml(progName)}</span></td>
           <td><strong>${Utils.escapeHtml(fs.class_or_grade)}</strong></td>
-          <td>${fs.board ? `<span class="badge badge-neutral">${Utils.escapeHtml(fs.board)}</span>` : '—'}</td>
-          <td><strong style="color: var(--text-main); font-size: 1rem;">${Utils.formatCurrency(fs.monthly_fee)}</strong> / mo</td>
+          <td>${fs.board ? `<span class="badge badge-neutral">${Utils.escapeHtml(fs.board)}</span>` : '<span class="text-muted">—</span>'}</td>
+          <td><strong style="color: var(--text-main); font-size: 0.95rem;">${Utils.formatCurrency(fs.monthly_fee)}</strong> / mo</td>
           <td>
-            <span class="badge ${fs.is_active ? 'badge-active' : 'badge-inactive'}">
+            <span class="badge ${fs.is_active ? 'badge-paid' : 'badge-neutral'}">
               <span class="badge-dot"></span>
               ${fs.is_active ? 'Active' : 'Inactive'}
             </span>
@@ -164,7 +163,7 @@ const FeesModule = {
     const is_active = document.getElementById('fee-status').checked;
 
     if (!programme_id || !class_or_grade || monthly_fee <= 0) {
-      Utils.showToast("Validation Error", "Please provide Programme, Class/Grade, and a valid Monthly Fee", "warning");
+      Utils.showToast("Validation", "Please provide Programme, Class/Grade, and Monthly Fee", "warning");
       return;
     }
 

@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>EduTrack – Tuition & Fee Management System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>EduTrack – Student, Tuition & Monthly Fee Management</title>
   
   <!-- CSS Stylesheets -->
   <link rel="stylesheet" href="css/style.css">
@@ -19,17 +19,15 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- jsPDF for PDF Receipts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- Supabase JS SDK -->
+  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-  <!-- Mobile Drawer Backdrop -->
-  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
-
+  <!-- App Shell -->
   <div id="app-container">
     
-    <!-- Dark Navy Sidebar -->
+    <!-- DESKTOP SIDEBAR -->
     <aside class="app-sidebar" id="app-sidebar">
       <div class="sidebar-brand">
         <img src="assets/logo/logo.jpg" alt="EduTrack Logo" class="brand-logo-img">
@@ -40,7 +38,7 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="sidebar-section-title">Core Management</div>
+        <div class="sidebar-section-title">CORE</div>
         
         <a href="#dashboard" class="sidebar-nav-item active" data-route="dashboard">
           <i data-lucide="layout-dashboard"></i>
@@ -52,17 +50,17 @@
           <span>Students</span>
         </a>
 
-        <a href="#fee-collection" class="sidebar-nav-item" data-route="fee-collection">
-          <i data-lucide="wallet"></i>
-          <span>Fee Collection</span>
-        </a>
-
         <a href="#monthly-fees" class="sidebar-nav-item" data-route="monthly-fees">
           <i data-lucide="calendar"></i>
-          <span>Monthly Fees</span>
+          <span>Fees</span>
         </a>
 
-        <div class="sidebar-section-title">Academic & Structure</div>
+        <a href="#fee-collection" class="sidebar-nav-item" data-route="fee-collection">
+          <i data-lucide="credit-card"></i>
+          <span>Payments</span>
+        </a>
+
+        <div class="sidebar-section-title">MANAGEMENT</div>
 
         <a href="#fee-structure" class="sidebar-nav-item" data-route="fee-structure">
           <i data-lucide="sliders"></i>
@@ -84,7 +82,7 @@
           <span>Reports</span>
         </a>
 
-        <div class="sidebar-section-title">System</div>
+        <div class="sidebar-section-title">SETTINGS</div>
 
         <a href="#excel-import" class="sidebar-nav-item" data-route="excel-import">
           <i data-lucide="file-spreadsheet"></i>
@@ -105,217 +103,204 @@
             <span class="admin-role admin-role-text">Master Admin</span>
           </div>
         </div>
-        <button class="sidebar-action-btn" onclick="AuthModule.logout()" title="Logout">
-          <i data-lucide="log-out" style="width: 18px; height: 18px;"></i>
+        <button class="sidebar-action-btn" onclick="AuthModule.logout()" title="Sign Out">
+          <i data-lucide="log-out" style="width: 17px; height: 17px;"></i>
         </button>
       </div>
     </aside>
 
-    <!-- Main Content Area -->
+    <!-- MAIN WORKSPACE -->
     <main class="app-main">
       
-      <!-- Sticky Header -->
+      <!-- CLEAN COMPACT HEADER (No duplicate action buttons!) -->
       <header class="app-header">
         <div class="header-left">
-          <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Toggle menu">
-            <i data-lucide="menu" style="width: 22px; height: 22px;"></i>
-          </button>
-          <div>
-            <div class="page-title-main" id="header-page-title">Dashboard Overview</div>
-            <div class="page-breadcrumb">
-              <span>EduTrack</span> &gt; <span class="brand-dynamic-name">Tuition Management</span>
-            </div>
+          <div class="header-brand-badge">
+            <img src="assets/logo/logo.jpg" alt="EduTrack">
+            <span class="brand-dynamic-name">EduTrack</span>
           </div>
+          <h1 class="page-title-main" id="header-page-title">Dashboard</h1>
         </div>
 
         <div class="header-right">
-          <button class="header-action-btn primary" onclick="StudentsModule.openAddStudentModal()">
-            <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
-            <span>Add Student</span>
-          </button>
-          <button class="header-action-btn" onclick="PaymentsModule.openRecordPaymentModal()">
-            <i data-lucide="credit-card" style="width: 15px; height: 15px;"></i>
-            <span>Record Payment</span>
-          </button>
+          <div class="academic-year-pill">
+            <span class="academic-year-dot"></span>
+            <span class="active-academic-year-text">2026-2027</span>
+          </div>
+
+          <div class="header-profile-menu">
+            <button class="header-logout-btn" onclick="AuthModule.logout()" title="Sign Out">
+              <i data-lucide="log-out" style="width: 14px; height: 14px;"></i>
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <!-- View Containers -->
+      <!-- PAGE VIEWS CONTAINER -->
       <div class="page-container">
         
-        <!-- 1. DASHBOARD VIEW -->
+        <!-- ===================================================================
+             1. DASHBOARD VIEW
+             =================================================================== -->
         <section class="page-view active" id="view-dashboard">
-          <div class="dashboard-actions-bar">
-            <div class="dashboard-welcome">
-              <h2>Overview Dashboard</h2>
-              <p>Tuition centre real-time metrics, student enrolments and fee collections.</p>
+          
+          <!-- Top Banner with 2 Primary Quick Actions -->
+          <div class="dashboard-top-banner">
+            <div class="dashboard-title-wrap">
+              <h2>Dashboard Overview</h2>
+              <div class="dashboard-meta-pills">
+                <span class="meta-pill">
+                  <i data-lucide="calendar" style="width: 13px; height: 13px;"></i>
+                  Academic Year: <strong class="active-academic-year-text" style="color: var(--accent-blue);">2026-2027</strong>
+                </span>
+                <span class="meta-pill">
+                  <i data-lucide="clock" style="width: 13px; height: 13px;"></i>
+                  Current Cycle: <strong>November 2026</strong>
+                </span>
+              </div>
             </div>
-            <div class="quick-action-group">
-              <button class="btn btn-primary btn-sm" onclick="StudentsModule.openAddStudentModal()">
-                <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Student
+
+            <div class="dashboard-quick-actions">
+              <button class="btn btn-primary" onclick="StudentsModule.openAddStudentModal()">
+                <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
+                <span>Add Student</span>
               </button>
-              <button class="btn btn-navy btn-sm" onclick="PaymentsModule.openRecordPaymentModal()">
-                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Record Payment
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="MonthlyFeesModule.openGenerateModal()">
-                <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Generate Monthly Fees
+              <button class="btn btn-navy" onclick="PaymentsModule.openRecordPaymentModal()">
+                <i data-lucide="credit-card" style="width: 15px; height: 15px;"></i>
+                <span>Record Payment</span>
               </button>
             </div>
           </div>
 
-          <!-- 8 Metric Cards Grid -->
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Total Students</span>
-                <span class="stat-card-value" id="metric-total-students">0</span>
-                <span class="stat-card-sub">Registered student profiles</span>
+          <!-- 4 Primary Metric Cards -->
+          <div class="primary-metrics-grid">
+            <div class="metric-card-primary">
+              <div class="metric-card-info">
+                <span class="metric-label">Active Students</span>
+                <span class="metric-value" id="metric-active-students">0</span>
+                <span class="metric-hint">Currently attending tuition</span>
               </div>
-              <div class="stat-icon-wrap primary">
-                <i data-lucide="users" style="width: 22px; height: 22px;"></i>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Active Students</span>
-                <span class="stat-card-value" id="metric-active-students">0</span>
-                <span class="stat-card-sub">Currently attending classes</span>
-              </div>
-              <div class="stat-icon-wrap success">
-                <i data-lucide="user-check" style="width: 22px; height: 22px;"></i>
+              <div class="metric-icon-box blue">
+                <i data-lucide="users"></i>
               </div>
             </div>
 
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Total Enrolments</span>
-                <span class="stat-card-value" id="metric-total-enrolments">0</span>
-                <span class="stat-card-sub">Active programme seats</span>
+            <div class="metric-card-primary">
+              <div class="metric-card-info">
+                <span class="metric-label">Expected Fees</span>
+                <span class="metric-value" id="metric-expected-fees">₹0</span>
+                <span class="metric-hint">Billed for current month</span>
               </div>
-              <div class="stat-icon-wrap accent">
-                <i data-lucide="book-open" style="width: 22px; height: 22px;"></i>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Expected Monthly Fees</span>
-                <span class="stat-card-value" id="metric-expected-fees">₹0</span>
-                <span class="stat-card-sub">Based on active enrolments</span>
-              </div>
-              <div class="stat-icon-wrap primary">
-                <i data-lucide="circle-dollar-sign" style="width: 22px; height: 22px;"></i>
+              <div class="metric-icon-box blue">
+                <i data-lucide="circle-dollar-sign"></i>
               </div>
             </div>
 
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Collected This Month</span>
-                <span class="stat-card-value" id="metric-collected-fees" style="color: var(--success);">₹0</span>
-                <span class="stat-card-sub">Actual payments recorded</span>
+            <div class="metric-card-primary">
+              <div class="metric-card-info">
+                <span class="metric-label">Collected</span>
+                <span class="metric-value" id="metric-collected-fees" style="color: var(--status-paid);">₹0</span>
+                <span class="metric-hint">Actual payments received</span>
               </div>
-              <div class="stat-icon-wrap success">
-                <i data-lucide="check-circle" style="width: 22px; height: 22px;"></i>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Pending Fees</span>
-                <span class="stat-card-value" id="metric-pending-fees" style="color: var(--danger);">₹0</span>
-                <span class="stat-card-sub">Outstanding balance</span>
-              </div>
-              <div class="stat-icon-wrap danger">
-                <i data-lucide="clock" style="width: 22px; height: 22px;"></i>
+              <div class="metric-icon-box green">
+                <i data-lucide="check-circle"></i>
               </div>
             </div>
 
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Partially Paid</span>
-                <span class="stat-card-value" id="metric-partial-students" style="color: var(--warning);">0</span>
-                <span class="stat-card-sub">Partial tuition payments</span>
+            <div class="metric-card-primary">
+              <div class="metric-card-info">
+                <span class="metric-label">Outstanding Fees</span>
+                <span class="metric-value" id="metric-pending-fees" style="color: var(--status-unpaid);">₹0</span>
+                <span class="metric-hint">Unpaid tuition dues</span>
               </div>
-              <div class="stat-icon-wrap warning">
-                <i data-lucide="pie-chart" style="width: 22px; height: 22px;"></i>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-card-info">
-                <span class="stat-card-label">Fully Paid Students</span>
-                <span class="stat-card-value" id="metric-paid-students" style="color: var(--success);">0</span>
-                <span class="stat-card-sub">Settled this billing cycle</span>
-              </div>
-              <div class="stat-icon-wrap success">
-                <i data-lucide="award" style="width: 22px; height: 22px;"></i>
+              <div class="metric-icon-box red">
+                <i data-lucide="clock"></i>
               </div>
             </div>
           </div>
 
-          <!-- Charts Grid -->
-          <div class="charts-grid">
-            <div class="chart-card">
-              <div class="card-header">
+          <!-- Secondary Compact Stat Chips -->
+          <div class="secondary-stats-strip">
+            <div class="secondary-stat-chip">
+              <span class="secondary-stat-label">Total Enrolments:</span>
+              <span class="secondary-stat-count" id="chip-total-enrolments">0</span>
+            </div>
+            <div class="secondary-stat-chip">
+              <span class="secondary-stat-label">Unpaid Invoices:</span>
+              <span class="secondary-stat-count" id="chip-unpaid-invoices" style="color: var(--status-unpaid);">0</span>
+            </div>
+            <div class="secondary-stat-chip">
+              <span class="secondary-stat-label">Partially Paid:</span>
+              <span class="secondary-stat-count" id="chip-partial-invoices" style="color: var(--status-pending);">0</span>
+            </div>
+            <div class="secondary-stat-chip">
+              <span class="secondary-stat-label">Fully Settled:</span>
+              <span class="secondary-stat-count" id="chip-paid-invoices" style="color: var(--status-paid);">0</span>
+            </div>
+          </div>
+
+          <!-- Middle Analytics Grid (Real Supabase Data Only) -->
+          <div class="analytics-middle-grid">
+            <div class="chart-card-box">
+              <div class="card-header" style="margin-bottom: 0.5rem; padding-bottom: 0.5rem;">
                 <div>
                   <div class="card-title">Monthly Collection Trend</div>
-                  <div class="card-subtitle">Tuition fees received over the last 6 months</div>
+                  <div class="card-subtitle">Actual payments collected per month</div>
                 </div>
               </div>
-              <div class="chart-wrapper">
+              <div class="chart-canvas-wrapper">
                 <canvas id="chart-monthly-collection"></canvas>
+                <div id="chart-empty-notice" class="empty-state" style="display: none; height: 100%; align-items: center; justify-content: center; flex-direction: column;">
+                  <i data-lucide="bar-chart-2" class="empty-state-icon"></i>
+                  <div class="empty-state-title">No payment records available for this period</div>
+                  <div class="empty-state-text">Collections will appear here as you record payments.</div>
+                </div>
               </div>
             </div>
 
-            <div class="chart-card">
-              <div class="card-header">
-                <div>
-                  <div class="card-title">Programme Distribution</div>
-                  <div class="card-subtitle">Active student enrolment share per programme</div>
+            <div class="chart-card-box">
+              <div class="card-header" style="margin-bottom: 0.5rem; padding-bottom: 0.5rem;">
+                <div class="card-title">Billing Status</div>
+                <div class="card-subtitle">Current month breakdown</div>
+              </div>
+              <div class="status-summary-list">
+                <div class="status-summary-row">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge-dot" style="background-color: var(--status-paid); width: 8px; height: 8px;"></span>
+                    <span>Fully Settled</span>
+                  </div>
+                  <strong id="summary-paid-count">0</strong>
                 </div>
-              </div>
-              <div class="chart-wrapper">
-                <canvas id="chart-programme-distribution"></canvas>
-              </div>
-            </div>
-
-            <div class="chart-card">
-              <div class="card-header">
-                <div>
-                  <div class="card-title">Monthly Paid vs Pending Comparison</div>
-                  <div class="card-subtitle">Billed tuition collections vs outstanding dues</div>
+                <div class="status-summary-row">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge-dot" style="background-color: var(--status-pending); width: 8px; height: 8px;"></span>
+                    <span>Partially Paid</span>
+                  </div>
+                  <strong id="summary-partial-count">0</strong>
                 </div>
-              </div>
-              <div class="chart-wrapper">
-                <canvas id="chart-paid-vs-pending"></canvas>
-              </div>
-            </div>
-
-            <div class="chart-card">
-              <div class="card-header">
-                <div>
-                  <div class="card-title">Programme-Wise Fee Collection</div>
-                  <div class="card-subtitle">Revenue breakdown by subject and Hindi tracks</div>
+                <div class="status-summary-row">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="badge-dot" style="background-color: var(--status-unpaid); width: 8px; height: 8px;"></span>
+                    <span>Unpaid Invoices</span>
+                  </div>
+                  <strong id="summary-unpaid-count">0</strong>
                 </div>
-              </div>
-              <div class="chart-wrapper">
-                <canvas id="chart-programme-revenue"></canvas>
               </div>
             </div>
           </div>
 
-          <!-- Bottom Grid: Recent Activity Feeds -->
+          <!-- Bottom Feeds Grid -->
           <div class="dashboard-bottom-grid">
             <div class="card">
               <div class="card-header">
                 <div class="card-title">
-                  <i data-lucide="credit-card" style="width: 18px; height: 18px; color: var(--success);"></i>
-                  Recent Payments
+                  <i data-lucide="alert-circle" style="width: 17px; height: 17px; color: var(--status-unpaid);"></i>
+                  Outstanding Due Students
                 </div>
-                <a href="#fee-collection" class="btn btn-secondary btn-sm">View All</a>
+                <a href="#monthly-fees" class="btn btn-secondary btn-sm">View Invoices</a>
               </div>
-              <div class="activity-list" id="dashboard-recent-payments">
+              <div id="dashboard-outstanding-students">
                 <!-- Dynamically populated -->
               </div>
             </div>
@@ -323,42 +308,58 @@
             <div class="card">
               <div class="card-header">
                 <div class="card-title">
-                  <i data-lucide="user-plus" style="width: 18px; height: 18px; color: var(--accent);"></i>
+                  <i data-lucide="credit-card" style="width: 17px; height: 17px; color: var(--status-paid);"></i>
+                  Recent Payments
+                </div>
+                <a href="#fee-collection" class="btn btn-secondary btn-sm">View All</a>
+              </div>
+              <div id="dashboard-recent-payments">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">
+                  <i data-lucide="user-plus" style="width: 17px; height: 17px; color: var(--accent-blue);"></i>
                   Recent Registrations
                 </div>
-                <a href="#students" class="btn btn-secondary btn-sm">View All</a>
+                <a href="#students" class="btn btn-secondary btn-sm">Directory</a>
               </div>
-              <div class="activity-list" id="dashboard-recent-students">
+              <div id="dashboard-recent-students">
                 <!-- Dynamically populated -->
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 2. STUDENTS VIEW -->
+        <!-- ===================================================================
+             2. STUDENTS VIEW
+             =================================================================== -->
         <section class="page-view" id="view-students">
           <div class="card">
             <div class="card-header">
               <div>
                 <div class="card-title">Student Directory</div>
-                <div class="card-subtitle">Manage tuition students, enrolments and balances</div>
+                <div class="card-subtitle">Manage tuition students, concurrent enrolments and balances</div>
               </div>
               <div class="card-actions">
                 <span class="badge badge-neutral" id="student-count-badge">0 students</span>
+                <!-- One Clear Primary Action -->
                 <button class="btn btn-primary" onclick="StudentsModule.openAddStudentModal()">
-                  <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Register Student
+                  <i data-lucide="plus" style="width: 15px; height: 15px;"></i> Add Student
                 </button>
               </div>
             </div>
 
-            <!-- Filter Bar -->
-            <div class="filter-bar">
+            <!-- Search & Filters -->
+            <div class="filter-bar" id="student-filter-bar">
               <div class="search-input-wrap">
                 <i data-lucide="search" class="search-icon"></i>
-                <input type="text" id="student-search-input" class="form-control search-input" placeholder="Search by name, ID, parent or WhatsApp number..." oninput="StudentsModule.renderStudentsTable()">
+                <input type="text" id="student-search-input" class="form-control search-input" placeholder="Search by student name, ID, parent or WhatsApp number..." oninput="StudentsModule.renderStudentsTable()">
               </div>
 
-              <select id="student-filter-programme" class="form-control" style="width: auto; min-width: 180px;" onchange="StudentsModule.renderStudentsTable()">
+              <select id="student-filter-programme" class="form-control" style="width: auto; min-width: 170px;" onchange="StudentsModule.renderStudentsTable()">
                 <option value="">All Programmes</option>
                 <option value="b0000000-0000-0000-0000-000000000001">Subject</option>
                 <option value="b0000000-0000-0000-0000-000000000002">Hindi</option>
@@ -366,13 +367,13 @@
                 <option value="b0000000-0000-0000-0000-000000000004">Online Hindi</option>
               </select>
 
-              <select id="student-filter-status" class="form-control" style="width: auto; min-width: 140px;" onchange="StudentsModule.renderStudentsTable()">
+              <select id="student-filter-status" class="form-control" style="width: auto; min-width: 130px;" onchange="StudentsModule.renderStudentsTable()">
                 <option value="">All Statuses</option>
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive</option>
               </select>
 
-              <select id="student-filter-payment" class="form-control" style="width: auto; min-width: 150px;" onchange="StudentsModule.renderStudentsTable()">
+              <select id="student-filter-payment" class="form-control" style="width: auto; min-width: 140px;" onchange="StudentsModule.renderStudentsTable()">
                 <option value="">Payment Status</option>
                 <option value="unpaid">Unpaid</option>
                 <option value="partially_paid">Partially Paid</option>
@@ -380,8 +381,8 @@
               </select>
             </div>
 
-            <!-- Table Responsive -->
-            <div class="table-responsive">
+            <!-- Desktop Table View -->
+            <div class="table-responsive desktop-table-container">
               <table class="data-table">
                 <thead>
                   <tr>
@@ -400,32 +401,40 @@
                 </tbody>
               </table>
             </div>
+
+            <!-- Mobile Student Summary Cards List -->
+            <div class="mobile-cards-list" id="students-mobile-cards-list">
+              <!-- Dynamically populated -->
+            </div>
           </div>
         </section>
 
-        <!-- 3. STUDENT PROFILE VIEW -->
+        <!-- ===================================================================
+             3. STUDENT PROFILE VIEW
+             =================================================================== -->
         <section class="page-view" id="view-student-profile">
           <div style="margin-bottom: 1rem;">
             <a href="#students" class="btn btn-secondary btn-sm">
-              <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i> Back to Student Directory
+              <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i> Back to Directory
             </a>
           </div>
 
           <div class="card">
             <div class="card-header">
               <div style="display: flex; align-items: center; gap: 0.85rem;">
-                <div class="admin-avatar" style="width: 48px; height: 48px; font-size: 1.1rem; background: var(--accent); color: #fff;">
+                <div class="admin-avatar" style="width: 44px; height: 44px; font-size: 1rem; background: var(--accent-blue); color: #fff;">
                   ST
                 </div>
                 <div>
-                  <h2 style="font-size: 1.3rem;" id="profile-student-name">Student Name</h2>
+                  <h2 style="font-size: 1.25rem;" id="profile-student-name">Student Name</h2>
                   <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem;">
                     <span class="badge badge-neutral" id="profile-student-id">STU-0000</span>
-                    <span class="badge badge-active" id="profile-status-badge">Active</span>
+                    <span class="badge badge-paid" id="profile-status-badge">Active</span>
                   </div>
                 </div>
               </div>
 
+              <!-- Contextual Profile Actions -->
               <div class="card-actions">
                 <a id="profile-whatsapp-action" href="#" target="_blank" class="btn btn-success btn-sm">
                   <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
@@ -434,50 +443,39 @@
                   <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i> Edit Profile
                 </button>
                 <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal(StudentsModule.currentProfileStudentId)">
-                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Record Payment
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
                 </button>
               </div>
             </div>
 
-            <!-- Financial Summary Grid -->
-            <div class="stats-grid" style="margin-bottom: 1.5rem;">
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Combined Monthly Fee</span>
-                  <span class="stat-card-value" id="profile-metric-monthly-fee" style="font-size: 1.3rem;">₹0</span>
-                </div>
+            <!-- Financial Metrics -->
+            <div class="secondary-stats-strip" style="margin-bottom: 1.5rem;">
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Combined Fee:</span>
+                <span class="secondary-stat-count" id="profile-metric-monthly-fee">₹0</span>
               </div>
-
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Outstanding Pending</span>
-                  <span class="stat-card-value" id="profile-metric-pending" style="font-size: 1.3rem; color: var(--danger);">₹0</span>
-                </div>
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Outstanding Due:</span>
+                <span class="secondary-stat-count" id="profile-metric-pending" style="color: var(--status-unpaid);">₹0</span>
               </div>
-
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Total Paid to Date</span>
-                  <span class="stat-card-value" id="profile-metric-paid" style="font-size: 1.3rem; color: var(--success);">₹0</span>
-                </div>
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Total Paid:</span>
+                <span class="secondary-stat-count" id="profile-metric-paid" style="color: var(--status-paid);">₹0</span>
               </div>
-
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Total Invoiced</span>
-                  <span class="stat-card-value" id="profile-metric-billed" style="font-size: 1.3rem;">₹0</span>
-                </div>
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Total Invoiced:</span>
+                <span class="secondary-stat-count" id="profile-metric-billed">₹0</span>
               </div>
             </div>
 
-            <!-- Student Details Grid -->
-            <div class="form-row" style="margin-bottom: 1.5rem; background: var(--surface-alt); padding: 1.25rem; border-radius: var(--radius-md);">
+            <!-- Details Box -->
+            <div class="form-row" style="margin-bottom: 1.5rem; background: var(--surface-subtle); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
               <div>
                 <span class="form-label">Parent / Guardian:</span>
                 <span id="profile-parent-name" style="font-weight: 600;">—</span>
               </div>
               <div>
-                <span class="form-label">Primary WhatsApp:</span>
+                <span class="form-label">WhatsApp Number:</span>
                 <span id="profile-whatsapp" style="font-weight: 600;">—</span>
               </div>
               <div>
@@ -489,22 +487,22 @@
                 <span id="profile-admission-date" style="font-weight: 600;">—</span>
               </div>
               <div style="grid-column: 1 / -1;">
-                <span class="form-label">Address:</span>
+                <span class="form-label">Residential Address:</span>
                 <span id="profile-address" style="color: var(--text-muted);">—</span>
               </div>
             </div>
 
             <!-- Enrolled Programmes -->
             <div style="margin-bottom: 1.5rem;">
-              <h3 style="font-size: 1.05rem; margin-bottom: 0.75rem;">Enrolled Programmes</h3>
-              <div id="profile-enrollments-list" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #ffffff;">
+              <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">Active Programme Enrolments</h3>
+              <div id="profile-enrollments-list" style="border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #ffffff;">
                 <!-- Dynamically populated -->
               </div>
             </div>
 
             <!-- Invoices Ledger -->
             <div style="margin-bottom: 1.5rem;">
-              <h3 style="font-size: 1.05rem; margin-bottom: 0.75rem;">Monthly Invoices</h3>
+              <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">Invoices Ledger</h3>
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
@@ -526,7 +524,7 @@
 
             <!-- Payment & Receipt History -->
             <div>
-              <h3 style="font-size: 1.05rem; margin-bottom: 0.75rem;">Payment & Receipt History</h3>
+              <h3 style="font-size: 1rem; margin-bottom: 0.75rem;">Payment Records & Receipts</h3>
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
@@ -534,7 +532,7 @@
                       <th>Payment #</th>
                       <th>Payment Date</th>
                       <th>Amount Received</th>
-                      <th>Payment Method</th>
+                      <th>Payment Mode</th>
                       <th>Receipt #</th>
                       <th style="text-align: right;">Action</th>
                     </tr>
@@ -548,78 +546,27 @@
           </div>
         </section>
 
-        <!-- 4. FEE COLLECTION VIEW -->
-        <section class="page-view" id="view-fee-collection">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Fee Collection & Payments</div>
-                <div class="card-subtitle">Record payments received, allocate against dues and issue official receipts</div>
-              </div>
-              <div class="card-actions">
-                <button class="btn btn-primary" onclick="PaymentsModule.openRecordPaymentModal()">
-                  <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Record Payment
-                </button>
-              </div>
-            </div>
-
-            <!-- Filter Bar -->
-            <div class="filter-bar">
-              <div class="search-input-wrap">
-                <i data-lucide="search" class="search-icon"></i>
-                <input type="text" id="payment-search-input" class="form-control search-input" placeholder="Search payments by student name, ID or payment number..." oninput="PaymentsModule.renderPaymentsTable()">
-              </div>
-
-              <select id="payment-filter-method" class="form-control" style="width: auto; min-width: 160px;" onchange="PaymentsModule.renderPaymentsTable()">
-                <option value="">All Payment Modes</option>
-                <option value="Cash">Cash</option>
-                <option value="UPI">UPI</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-                <option value="Card">Card</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Payment #</th>
-                    <th>Student</th>
-                    <th>Payment Date</th>
-                    <th>Amount Received</th>
-                    <th>Payment Method</th>
-                    <th>Issued Receipt</th>
-                    <th style="text-align: right;">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="payments-table-body">
-                  <!-- Dynamically populated -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- 5. MONTHLY FEES VIEW -->
+        <!-- ===================================================================
+             4. FEES (MONTHLY FEES) VIEW
+             =================================================================== -->
         <section class="page-view" id="view-monthly-fees">
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">Monthly Fee Invoices</div>
-                <div class="card-subtitle">Monthly fee records, collection statuses and batch invoicing</div>
+                <div class="card-title">Monthly Tuition Fees</div>
+                <div class="card-subtitle">Monthly billing period records and batch invoice generation</div>
               </div>
               <div class="card-actions">
+                <!-- One Clear Primary Action -->
                 <button class="btn btn-primary" onclick="MonthlyFeesModule.openGenerateModal()">
-                  <i data-lucide="zap" style="width: 16px; height: 16px;"></i> Generate Monthly Fees
+                  <i data-lucide="zap" style="width: 15px; height: 15px;"></i> Generate Monthly Invoices
                 </button>
               </div>
             </div>
 
-            <!-- Filter & Monthly Summary Bar -->
-            <div class="filter-bar" style="background: var(--surface-alt); padding: 0.85rem; border-radius: var(--radius-md);">
+            <div class="filter-bar" style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
               <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <label class="form-label" style="margin: 0;">Period:</label>
+                <label class="form-label" style="margin: 0;">Billing Cycle:</label>
                 <select id="monthly-fee-filter-month" class="form-control" style="width: auto;" onchange="MonthlyFeesModule.renderMonthlyFeesTable()">
                   <option value="1">January</option>
                   <option value="2">February</option>
@@ -649,14 +596,15 @@
                 </select>
               </div>
 
-              <div style="margin-left: auto; display: flex; gap: 1rem; align-items: center; font-size: 0.85rem;">
+              <div style="margin-left: auto; display: flex; gap: 1rem; align-items: center; font-size: 0.82rem; flex-wrap: wrap;">
                 <div>Expected: <strong id="month-summary-expected">₹0</strong></div>
-                <div>Collected: <strong id="month-summary-collected" style="color: var(--success);">₹0</strong></div>
-                <div>Pending: <strong id="month-summary-pending" style="color: var(--danger);">₹0</strong></div>
+                <div>Collected: <strong id="month-summary-collected" style="color: var(--status-paid);">₹0</strong></div>
+                <div>Pending: <strong id="month-summary-pending" style="color: var(--status-unpaid);">₹0</strong></div>
               </div>
             </div>
 
-            <div class="table-responsive">
+            <!-- Desktop Table -->
+            <div class="table-responsive desktop-table-container">
               <table class="data-table">
                 <thead>
                   <tr>
@@ -675,27 +623,94 @@
                 </tbody>
               </table>
             </div>
+
+            <!-- Mobile Cards -->
+            <div class="mobile-cards-list" id="monthly-fees-mobile-cards-list">
+              <!-- Dynamically populated -->
+            </div>
           </div>
         </section>
 
-        <!-- 6. FEE STRUCTURE VIEW -->
+        <!-- ===================================================================
+             5. PAYMENTS (FEE COLLECTION) VIEW
+             =================================================================== -->
+        <section class="page-view" id="view-fee-collection">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Fee Collection & Payments</div>
+                <div class="card-subtitle">Record received payments, allocate against dues and issue official receipts</div>
+              </div>
+              <div class="card-actions">
+                <!-- One Clear Primary Action -->
+                <button class="btn btn-primary" onclick="PaymentsModule.openRecordPaymentModal()">
+                  <i data-lucide="plus" style="width: 15px; height: 15px;"></i> Record Payment
+                </button>
+              </div>
+            </div>
+
+            <div class="filter-bar">
+              <div class="search-input-wrap">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" id="payment-search-input" class="form-control search-input" placeholder="Search payments by student name, ID or payment number..." oninput="PaymentsModule.renderPaymentsTable()">
+              </div>
+
+              <select id="payment-filter-method" class="form-control" style="width: auto; min-width: 160px;" onchange="PaymentsModule.renderPaymentsTable()">
+                <option value="">All Payment Modes</option>
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Card">Card</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <!-- Desktop Table -->
+            <div class="table-responsive desktop-table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Payment #</th>
+                    <th>Student</th>
+                    <th>Payment Date</th>
+                    <th>Amount Received</th>
+                    <th>Payment Mode</th>
+                    <th>Receipt Issued</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="payments-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Mobile Cards -->
+            <div class="mobile-cards-list" id="payments-mobile-cards-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================================================================
+             6. FEE STRUCTURE VIEW
+             =================================================================== -->
         <section class="page-view" id="view-fee-structure">
           <div class="card">
             <div class="card-header">
               <div>
                 <div class="card-title">Fee Structure Management</div>
-                <div class="card-subtitle">Tuition fees per programme, class/grade and board (single source of truth)</div>
+                <div class="card-subtitle">Tuition fees per programme, class/grade and board (Single Source of Truth)</div>
               </div>
               <div class="card-actions">
-                <button class="btn btn-primary" onclick="FeesModule.openAddModal()">
-                  <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Add Fee Rule
+                <button class="btn btn-primary btn-sm" onclick="FeesModule.openAddModal()">
+                  <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Fee Rule
                 </button>
               </div>
             </div>
 
-            <!-- Filter by Programme -->
             <div class="filter-bar">
-              <select id="fee-structure-filter-prog" class="form-control" style="width: auto; min-width: 220px;" onchange="FeesModule.renderFeeStructureTable(this.value)">
+              <select id="fee-structure-filter-prog" class="form-control" style="width: auto; min-width: 200px;" onchange="FeesModule.renderFeeStructureTable(this.value)">
                 <option value="">All Programmes (Matrix)</option>
                 <option value="b0000000-0000-0000-0000-000000000001">Subject</option>
                 <option value="b0000000-0000-0000-0000-000000000002">Hindi</option>
@@ -710,7 +725,7 @@
                   <tr>
                     <th>Programme</th>
                     <th>Class / Grade</th>
-                    <th>Board / Mode</th>
+                    <th>Board / Category</th>
                     <th>Monthly Fee</th>
                     <th>Status</th>
                     <th style="text-align: right;">Actions</th>
@@ -724,13 +739,15 @@
           </div>
         </section>
 
-        <!-- 7. PROMOTIONS VIEW -->
+        <!-- ===================================================================
+             7. PROMOTIONS VIEW
+             =================================================================== -->
         <section class="page-view" id="view-promotions">
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">Academic Student Promotions</div>
-                <div class="card-subtitle">Strictly manual promotions: select target class, auto-fetch fee and update enrolment</div>
+                <div class="card-title">Student Promotions</div>
+                <div class="card-subtitle">Manual academic promotions with persistent class history & auto-fee calculation</div>
               </div>
               <div class="card-actions">
                 <select id="promotion-academic-year-select" class="form-control" style="width: auto;">
@@ -745,7 +762,7 @@
                 <input type="text" id="promotion-search-input" class="form-control search-input" placeholder="Search student by name or ID to promote..." oninput="PromotionsModule.renderPromotionTable()">
               </div>
 
-              <select id="promotion-filter-prog" class="form-control" style="width: auto; min-width: 180px;" onchange="PromotionsModule.renderPromotionTable()">
+              <select id="promotion-filter-prog" class="form-control" style="width: auto; min-width: 170px;" onchange="PromotionsModule.renderPromotionTable()">
                 <option value="">All Programmes</option>
                 <option value="b0000000-0000-0000-0000-000000000001">Subject</option>
                 <option value="b0000000-0000-0000-0000-000000000002">Hindi</option>
@@ -758,12 +775,11 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="width: 40px;"><input type="checkbox" disabled></th>
                     <th>Student ID</th>
                     <th>Student Name</th>
                     <th>Programme</th>
                     <th>Current Class</th>
-                    <th>Current Fee</th>
+                    <th>Current Monthly Fee</th>
                     <th style="text-align: right;">Action</th>
                   </tr>
                 </thead>
@@ -775,24 +791,27 @@
           </div>
         </section>
 
-        <!-- 8. RECEIPTS VIEW -->
+        <!-- ===================================================================
+             8. RECEIPTS VIEW
+             =================================================================== -->
         <section class="page-view" id="view-receipts">
           <div class="card">
             <div class="card-header">
               <div>
                 <div class="card-title">Payment Receipts Directory</div>
-                <div class="card-subtitle">Official computer-generated fee receipts, PDF download and WhatsApp sharing</div>
+                <div class="card-subtitle">Official computer-generated tuition receipts, PDF download and WhatsApp sharing</div>
               </div>
             </div>
 
             <div class="filter-bar">
               <div class="search-input-wrap">
                 <i data-lucide="search" class="search-icon"></i>
-                <input type="text" id="receipt-search-input" class="form-control search-input" placeholder="Search receipts by receipt #, student name or ID..." oninput="ReceiptsModule.renderReceiptsTable()">
+                <input type="text" id="receipt-search-input" class="form-control search-input" placeholder="Search receipts by receipt number, student name or ID..." oninput="ReceiptsModule.renderReceiptsTable()">
               </div>
             </div>
 
-            <div class="table-responsive">
+            <!-- Desktop Table -->
+            <div class="table-responsive desktop-table-container">
               <table class="data-table">
                 <thead>
                   <tr>
@@ -810,16 +829,23 @@
                 </tbody>
               </table>
             </div>
+
+            <!-- Mobile Cards -->
+            <div class="mobile-cards-list" id="receipts-mobile-cards-list">
+              <!-- Dynamically populated -->
+            </div>
           </div>
         </section>
 
-        <!-- 9. REPORTS VIEW -->
+        <!-- ===================================================================
+             9. REPORTS VIEW
+             =================================================================== -->
         <section class="page-view" id="view-reports">
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">Reports & Analytics</div>
-                <div class="card-subtitle">Comprehensive financial summaries, student fee balances and export options</div>
+                <div class="card-title">Reports & Financial Export</div>
+                <div class="card-subtitle">Tuition collection summaries, student balance sheets and Excel export</div>
               </div>
               <div class="card-actions">
                 <button class="btn btn-secondary btn-sm" onclick="ReportsModule.exportToCSV()">
@@ -828,33 +854,21 @@
                 <button class="btn btn-success btn-sm" onclick="ReportsModule.exportToExcel()">
                   <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px;"></i> Export Excel (.xlsx)
                 </button>
-                <button class="btn btn-navy btn-sm" onclick="window.print()">
-                  <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Print Report
-                </button>
               </div>
             </div>
 
-            <!-- Stats Bar -->
-            <div class="stats-grid" style="margin-bottom: 1.5rem;">
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Active Tuition Students</span>
-                  <span class="stat-card-value" id="report-stat-students">0</span>
-                </div>
+            <div class="secondary-stats-strip" style="margin-bottom: 1.5rem;">
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Active Students:</span>
+                <span class="secondary-stat-count" id="report-stat-students">0</span>
               </div>
-
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Total Fees Collected</span>
-                  <span class="stat-card-value" id="report-stat-collected" style="color: var(--success);">₹0</span>
-                </div>
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Total Collections:</span>
+                <span class="secondary-stat-count" id="report-stat-collected" style="color: var(--status-paid);">₹0</span>
               </div>
-
-              <div class="stat-card" style="padding: 1rem;">
-                <div class="stat-card-info">
-                  <span class="stat-card-label">Total Outstanding Dues</span>
-                  <span class="stat-card-value" id="report-stat-pending" style="color: var(--danger);">₹0</span>
-                </div>
+              <div class="secondary-stat-chip">
+                <span class="secondary-stat-label">Outstanding Dues:</span>
+                <span class="secondary-stat-count" id="report-stat-pending" style="color: var(--status-unpaid);">₹0</span>
               </div>
             </div>
 
@@ -879,36 +893,37 @@
           </div>
         </section>
 
-        <!-- 10. EXCEL IMPORT VIEW -->
+        <!-- ===================================================================
+             10. EXCEL IMPORT VIEW
+             =================================================================== -->
         <section class="page-view" id="view-excel-import">
           <div class="card">
             <div class="card-header">
               <div>
                 <div class="card-title">Excel Workbook Importer</div>
-                <div class="card-subtitle">Import students and enrolments from existing Excel workbooks (e.g. I2B.xlsx)</div>
+                <div class="card-subtitle">Import student records and multi-programme enrolments from Excel (I2B.xlsx)</div>
               </div>
             </div>
 
-            <div style="background: var(--surface-alt); padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 2px dashed var(--border-color); text-align: center;">
-              <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: var(--accent); margin-bottom: 0.75rem;"></i>
-              <h3 style="font-size: 1.1rem; margin-bottom: 0.35rem;">Upload Excel Workbook (.xlsx)</h3>
-              <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 500px; margin: 0 auto 1.25rem auto;">
-                Select your <code>I2B.xlsx</code> file. The parser will automatically identify Subject, Hindi, Weekend Hindi and Online Hindi students, deduplicate multi-programme attendees, and preview the records.
+            <div style="background: var(--surface-subtle); padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 2px dashed var(--border-light); text-align: center;">
+              <i data-lucide="upload-cloud" style="width: 44px; height: 44px; color: var(--accent-blue); margin-bottom: 0.5rem;"></i>
+              <h3 style="font-size: 1.05rem; margin-bottom: 0.25rem;">Upload Excel Workbook (.xlsx)</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted); max-width: 460px; margin: 0 auto 1rem auto;">
+                Select your <code>I2B.xlsx</code> file. EduTrack parses Subject, Hindi, Weekend Hindi and Online Hindi tracks, deduplicating students attending multiple programmes.
               </p>
-              <input type="file" id="excel-file-upload" accept=".xlsx, .xls" class="form-control" style="max-width: 350px; margin: 0 auto; display: block;">
+              <input type="file" id="excel-file-upload" accept=".xlsx, .xls" class="form-control" style="max-width: 320px; margin: 0 auto; display: block;">
             </div>
 
-            <!-- Preview Container -->
             <div id="excel-preview-container" style="display: none;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: gap;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                 <div>
-                  <h3 style="font-size: 1.1rem;">Extracted Records Preview</h3>
-                  <div style="font-size: 0.82rem; color: var(--text-muted);">
-                    <span id="excel-preview-count">0 Students</span> • <span id="excel-preview-multi-count" style="color: var(--accent); font-weight: 600;">0 Multi-Programme</span>
+                  <h3 style="font-size: 1rem;">Extracted Records Preview</h3>
+                  <div style="font-size: 0.8rem; color: var(--text-muted);">
+                    <span id="excel-preview-count">0 Students</span> • <span id="excel-preview-multi-count" style="color: var(--accent-blue); font-weight: 600;">0 Multi-Programme</span>
                   </div>
                 </div>
-                <button class="btn btn-success" onclick="ExcelImportModule.confirmImport()">
-                  <i data-lucide="check" style="width: 16px; height: 16px;"></i> Confirm & Import to Database
+                <button class="btn btn-success btn-sm" onclick="ExcelImportModule.confirmImport()">
+                  <i data-lucide="check" style="width: 14px; height: 14px;"></i> Confirm & Import to Database
                 </button>
               </div>
 
@@ -918,9 +933,9 @@
                     <tr>
                       <th>#</th>
                       <th>Student Name</th>
-                      <th>Enrolments Detected</th>
+                      <th>Detected Programmes</th>
                       <th>Combined Monthly Fee</th>
-                      <th>Initial Payment Status</th>
+                      <th>Initial Status</th>
                     </tr>
                   </thead>
                   <tbody id="excel-preview-tbody">
@@ -932,22 +947,23 @@
           </div>
         </section>
 
-        <!-- 11. SETTINGS VIEW -->
+        <!-- ===================================================================
+             11. SETTINGS VIEW
+             =================================================================== -->
         <section class="page-view" id="view-settings">
           <div class="card">
             <div class="card-header">
               <div>
                 <div class="card-title">System & Organisation Settings</div>
-                <div class="card-subtitle">Branding, financial prefixes, invoice due dates and programme management</div>
+                <div class="card-subtitle">Branding, financial prefixes, default due day and academic configurations</div>
               </div>
             </div>
 
-            <!-- Tabs: Settings / Programmes -->
             <form onsubmit="SettingsModule.saveSettings(event)">
-              <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--accent);">Organisation Branding & Details</h3>
+              <h3 style="font-size: 0.95rem; margin-bottom: 0.85rem; color: var(--accent-blue);">Organisation Profile</h3>
               <div class="form-row">
                 <div class="form-group">
-                  <label class="form-label">Institution / Tuition Name <span class="required">*</span></label>
+                  <label class="form-label">Tuition / Institution Name <span class="required">*</span></label>
                   <input type="text" id="setting-org-name" class="form-control" required>
                 </div>
 
@@ -984,7 +1000,7 @@
                 <input type="text" id="setting-org-address" class="form-control">
               </div>
 
-              <h3 style="font-size: 1rem; margin: 1.5rem 0 1rem 0; color: var(--accent);">Financial & Receipt Configuration</h3>
+              <h3 style="font-size: 0.95rem; margin: 1.5rem 0 0.85rem 0; color: var(--accent-blue);">Financial & Numbering Configuration</h3>
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Currency Symbol</label>
@@ -992,7 +1008,7 @@
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Default Monthly Invoice Due Day</label>
+                  <label class="form-label">Default Invoice Due Day (of month)</label>
                   <input type="number" id="setting-due-day" class="form-control" min="1" max="28" value="10" required>
                 </div>
 
@@ -1018,17 +1034,42 @@
               </div>
 
               <button type="submit" class="btn btn-primary">
-                <i data-lucide="save" style="width: 16px; height: 16px;"></i> Save All Settings
+                <i data-lucide="save" style="width: 15px; height: 15px;"></i> Save Settings
               </button>
             </form>
 
-            <hr style="border: none; border-top: 1px solid var(--border-color); margin: 2rem 0;">
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: 2rem 0;">
 
-            <!-- Manage Programmes Section -->
-            <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 1rem;">
+            <!-- Academic Years Configuration -->
+            <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 0.75rem;">
               <div>
-                <div class="card-title">Academic Programmes</div>
-                <div class="card-subtitle">Manage tuition programmes, names and active statuses</div>
+                <div class="card-title">Academic Years Management</div>
+                <div class="card-subtitle">Active and historical academic cycles</div>
+              </div>
+            </div>
+
+            <div class="table-responsive" style="margin-bottom: 2rem;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Year Name</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="academic-years-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Programmes Management -->
+            <div class="card-header" style="border-bottom: none; padding: 0; margin-bottom: 0.75rem;">
+              <div>
+                <div class="card-title">Tuition Programmes</div>
+                <div class="card-subtitle">Manage programmes, descriptions and active statuses</div>
               </div>
               <button class="btn btn-secondary btn-sm" onclick="ProgrammesModule.openAddModal()">
                 <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Programme
@@ -1059,6 +1100,81 @@
   </div>
 
   <!-- =======================================================================
+       PERSISTENT MOBILE BOTTOM NAVIGATION BAR (Inspired by modern SaaS)
+       ======================================================================= -->
+  <nav class="mobile-bottom-nav">
+    <div class="mobile-nav-inner">
+      <a href="#dashboard" class="mobile-nav-item active" data-route="dashboard">
+        <i data-lucide="home"></i>
+        <span>Home</span>
+      </a>
+
+      <a href="#students" class="mobile-nav-item" data-route="students">
+        <i data-lucide="users"></i>
+        <span>Students</span>
+      </a>
+
+      <a href="#monthly-fees" class="mobile-nav-item" data-route="monthly-fees">
+        <i data-lucide="calendar"></i>
+        <span>Fees</span>
+      </a>
+
+      <a href="#fee-collection" class="mobile-nav-item" data-route="fee-collection">
+        <i data-lucide="credit-card"></i>
+        <span>Payments</span>
+      </a>
+
+      <a href="#more" class="mobile-nav-item" id="mobile-nav-more-btn" data-route="more">
+        <i data-lucide="more-horizontal"></i>
+        <span>More</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Mobile "More" Bottom Sheet & Backdrop -->
+  <div class="bottom-sheet-backdrop" id="bottom-sheet-backdrop"></div>
+  <div class="bottom-sheet" id="mobile-more-sheet">
+    <div class="bottom-sheet-drag-handle"></div>
+    <div class="bottom-sheet-header">
+      <span class="bottom-sheet-title">Management & Tools</span>
+      <button class="modal-close-btn" onclick="App.closeMoreSheet()">
+        <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+      </button>
+    </div>
+    <div class="bottom-sheet-grid">
+      <a href="#fee-structure" class="bottom-sheet-item">
+        <i data-lucide="sliders"></i>
+        <span>Fee Structure</span>
+      </a>
+
+      <a href="#promotions" class="bottom-sheet-item">
+        <i data-lucide="trending-up"></i>
+        <span>Promotions</span>
+      </a>
+
+      <a href="#receipts" class="bottom-sheet-item">
+        <i data-lucide="file-check"></i>
+        <span>Receipts</span>
+      </a>
+
+      <a href="#reports" class="bottom-sheet-item">
+        <i data-lucide="bar-chart-2"></i>
+        <span>Reports</span>
+      </a>
+
+      <a href="#excel-import" class="bottom-sheet-item">
+        <i data-lucide="file-spreadsheet"></i>
+        <span>Excel Import</span>
+      </a>
+
+      <a href="#settings" class="bottom-sheet-item">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- =======================================================================
        MODALS
        ======================================================================= -->
 
@@ -1069,7 +1185,7 @@
         <div>
           <div class="modal-title" id="student-modal-title">Register New Student</div>
           <div style="font-size: 0.78rem; color: var(--text-muted);">
-            ID: <strong id="student-code-preview" style="color: var(--accent);">STU-0001</strong> • Initial Status: <span class="badge badge-unpaid">UNPAID</span>
+            ID: <strong id="student-code-preview" style="color: var(--accent-blue);">STU-0001</strong> • Initial Status: <span class="badge badge-unpaid">UNPAID</span>
           </div>
         </div>
         <button class="modal-close-btn" onclick="Utils.closeModal('modal-add-student')">
@@ -1082,14 +1198,14 @@
           <input type="hidden" id="student-form-id">
 
           <!-- Section A: Student Personal Details -->
-          <div style="font-size: 0.85rem; font-weight: 700; color: var(--accent); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
-            Section A – Personal Information
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--accent-blue); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+            Section A – Personal & Contact Details
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Student Name <span class="required">*</span></label>
-              <input type="text" id="student-name-input" class="form-control" placeholder="Full Name" required>
+              <input type="text" id="student-name-input" class="form-control" placeholder="Student Full Name" required>
             </div>
 
             <div class="form-group">
@@ -1099,52 +1215,66 @@
 
             <div class="form-group">
               <label class="form-label">Parent WhatsApp Number <span class="required">*</span></label>
-              <input type="tel" id="student-phone-input" class="form-control" placeholder="e.g. 9876543210" required>
+              <input type="tel" id="student-phone-input" class="form-control" placeholder="10-digit WhatsApp number" required>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Alternate Phone</label>
-              <input type="tel" id="student-alt-phone-input" class="form-control" placeholder="Optional phone">
+              <label class="form-label">Joining Date <span class="required">*</span></label>
+              <input type="date" id="student-joining-date-input" class="form-control" required>
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Address</label>
-              <input type="text" id="student-address-input" class="form-control" placeholder="Residential Address">
-            </div>
+          <!-- Expandable Additional Details -->
+          <details style="margin-bottom: 1rem; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.5rem 0.85rem; background: var(--surface-subtle);">
+            <summary style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); cursor: pointer;">
+              Additional Details (Alternate Contact, Address, Status)
+            </summary>
+            <div class="form-row" style="margin-top: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Alternate Phone</label>
+                <input type="tel" id="student-alt-phone-input" class="form-control" placeholder="Optional phone">
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">Student Status</label>
-              <select id="student-status-select" class="form-control">
-                <option value="active" selected>Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
+              <div class="form-group">
+                <label class="form-label">Residential Address</label>
+                <input type="text" id="student-address-input" class="form-control" placeholder="Address">
+              </div>
 
-          <hr style="border: none; border-top: 1px solid var(--border-color); margin: 1.25rem 0;">
+              <div class="form-group">
+                <label class="form-label">Student Status</label>
+                <select id="student-status-select" class="form-control">
+                  <option value="active" selected>Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">Notes</label>
+                <input type="text" id="student-notes-input" class="form-control" placeholder="Remarks">
+              </div>
+            </div>
+          </details>
 
           <!-- Section B: Dynamic Multi-Programme Selection -->
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-            <div style="font-size: 0.85rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">
               Section B – Programme Enrolment(s)
             </div>
             <button type="button" class="btn btn-secondary btn-sm" onclick="StudentsModule.addProgrammeRow()">
-              <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Another Programme
+              <i data-lucide="plus" style="width: 13px; height: 13px;"></i> Add Another Programme
             </button>
           </div>
 
-          <!-- Dynamic Container for Programme Rows -->
+          <!-- Container for Dynamic Programme Cards -->
           <div id="programme-rows-container">
-            <!-- Dynamically populated rows -->
+            <!-- Dynamically populated cards -->
           </div>
 
-          <!-- Section C: Combined Monthly Fee Preview (Part 3 & Part 7) -->
-          <div style="background: var(--surface-alt); border: 1px solid var(--primary-border); padding: 1rem; border-radius: var(--radius-md); margin-top: 1rem;">
+          <!-- Section C: Running Combined Monthly Fee Preview -->
+          <div style="background: var(--surface-subtle); border: 1px solid var(--accent-border); padding: 1rem; border-radius: var(--radius-md); margin-top: 1rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
               <div>
-                <div style="font-size: 0.78rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">
                   Combined Monthly Fee:
                 </div>
                 <div id="combined-fee-preview-breakdown" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem;">
@@ -1155,8 +1285,8 @@
                 ₹0
               </div>
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.4rem;">
-              ⚠️ <strong>Business Rule Enforced:</strong> Saving registers student with initial payment status <strong>UNPAID</strong>. No payment is collected until recorded in Fee Collection.
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.5rem; border-top: 1px dashed var(--border-light); padding-top: 0.4rem;">
+              ⚠️ <strong>Registration ≠ Payment:</strong> Saving creates student with initial status <strong>UNPAID</strong>. No payment is collected until recorded in Fee Collection.
             </div>
           </div>
         </div>
@@ -1164,7 +1294,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-add-student')">Cancel</button>
           <button type="submit" class="btn btn-primary">
-            <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save Student (Status: Unpaid)
+            <i data-lucide="check" style="width: 15px; height: 15px;"></i> Save Student (Status: Unpaid)
           </button>
         </div>
       </form>
@@ -1193,7 +1323,6 @@
             </select>
           </div>
 
-          <!-- Pending Invoices Checklist -->
           <div id="payment-invoices-checklist" style="margin-bottom: 1.25rem;">
             <!-- Dynamically populated -->
           </div>
@@ -1212,7 +1341,7 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Payment Method <span class="required">*</span></label>
+              <label class="form-label">Payment Mode <span class="required">*</span></label>
               <select id="payment-method-select" class="form-control" required>
                 <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
                 <option value="Cash">Cash</option>
@@ -1224,7 +1353,7 @@
 
             <div class="form-group">
               <label class="form-label">Transaction Reference / UTR</label>
-              <input type="text" id="payment-ref-input" class="form-control" placeholder="e.g. UPI Ref / Cheque No">
+              <input type="text" id="payment-ref-input" class="form-control" placeholder="UPI Reference / Cheque No">
             </div>
           </div>
 
@@ -1237,7 +1366,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-record-payment')">Cancel</button>
           <button type="submit" class="btn btn-primary">
-            <i data-lucide="check" style="width: 16px; height: 16px;"></i> Confirm Payment & Issue Receipt
+            <i data-lucide="check" style="width: 15px; height: 15px;"></i> Confirm Payment & Issue Receipt
           </button>
         </div>
       </form>
@@ -1249,8 +1378,8 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
-          <div class="modal-title">Payment Receipt Preview</div>
-          <div style="font-size: 0.78rem; color: var(--text-muted);" id="receipt-view-number">REC-000000-000</div>
+          <div class="modal-title">Official Fee Receipt</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);" id="receipt-view-number">REC-000000-0000</div>
         </div>
         <button class="modal-close-btn" onclick="Utils.closeModal('modal-view-receipt')">
           <i data-lucide="x" style="width: 18px; height: 18px;"></i>
@@ -1258,11 +1387,11 @@
       </div>
 
       <div class="modal-body" id="receipt-printable-area">
-        <div style="text-align: center; border-bottom: 2px solid var(--border-color); padding-bottom: 0.85rem; margin-bottom: 1rem;">
-          <h2 style="font-size: 1.25rem; font-weight: 800;" id="receipt-institution-name">I2B Educational Institution</h2>
+        <div style="text-align: center; border-bottom: 2px solid var(--border-light); padding-bottom: 0.85rem; margin-bottom: 1rem;">
+          <h2 style="font-size: 1.25rem; font-weight: 800;" id="receipt-institution-name">EduTrack Tuition Centre</h2>
           <div style="font-size: 0.78rem; color: var(--text-muted);" id="receipt-institution-address">Chennai, Tamil Nadu</div>
-          <div style="display: inline-block; background: var(--primary-light); color: var(--primary); font-weight: 700; font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); margin-top: 0.4rem;">
-            OFFICIAL FEE RECEIPT
+          <div style="display: inline-block; background: var(--accent-light); color: var(--accent-blue); font-weight: 700; font-size: 0.74rem; padding: 0.2rem 0.65rem; border-radius: var(--radius-full); margin-top: 0.4rem;">
+            OFFICIAL PAYMENT RECEIPT
           </div>
         </div>
 
@@ -1278,39 +1407,39 @@
           </div>
         </div>
 
-        <div style="background: var(--surface-alt); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem;">
+        <div style="background: var(--surface-subtle); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.88rem;">
             <span>Amount Received:</span>
-            <strong style="color: var(--success); font-size: 1.1rem;" id="receipt-view-amount-paid">₹0</strong>
+            <strong style="color: var(--status-paid); font-size: 1.15rem;" id="receipt-view-amount-paid">₹0</strong>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.4rem;">
             <span>Payment Mode:</span>
-            <span id="receipt-view-method">Cash</span>
+            <span id="receipt-view-method">UPI</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.4rem;">
             <span>Reference / UTR:</span>
             <span id="receipt-view-ref">None</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 0.88rem; border-top: 1px dashed var(--border-color); padding-top: 0.4rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.88rem; border-top: 1px dashed var(--border-light); padding-top: 0.4rem;">
             <span>Remaining Pending Balance:</span>
             <strong id="receipt-view-balance">₹0</strong>
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; font-style: italic;" id="receipt-footer-text">
+        <div style="font-size: 0.74rem; color: var(--text-muted); text-align: center; font-style: italic;" id="receipt-footer-text">
           Thank you for your payment!
         </div>
       </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="ReceiptsModule.printReceipt()">
-          <i data-lucide="printer" style="width: 15px; height: 15px;"></i> Print
+          <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Print
         </button>
         <button type="button" class="btn btn-primary" onclick="ReceiptsModule.downloadPDF()">
-          <i data-lucide="download" style="width: 15px; height: 15px;"></i> Download PDF
+          <i data-lucide="download" style="width: 14px; height: 14px;"></i> Download PDF
         </button>
         <button type="button" class="btn btn-success" onclick="ReceiptsModule.shareViaWhatsApp(ReceiptsModule.currentReceipt?.id)">
-          <i data-lucide="message-circle" style="width: 15px; height: 15px;"></i> Send via WhatsApp
+          <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> Share WhatsApp
         </button>
       </div>
     </div>
@@ -1321,7 +1450,7 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
-          <div class="modal-title">Generate Monthly Fees</div>
+          <div class="modal-title">Generate Monthly Invoices</div>
           <div style="font-size: 0.78rem; color: var(--text-muted);">Batch invoice creation for all eligible active students</div>
         </div>
         <button class="modal-close-btn" onclick="Utils.closeModal('modal-generate-invoices')">
@@ -1359,30 +1488,30 @@
           </div>
         </div>
 
-        <div style="background: var(--surface-alt); padding: 1rem; border-radius: var(--radius-md); font-size: 0.88rem;">
+        <div style="background: var(--surface-subtle); padding: 1rem; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-            <span>Eligible Students to Invoice:</span>
+            <span>Eligible Active Students to Invoice:</span>
             <strong id="gen-preview-eligible-count">0</strong>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
             <span>Already Invoiced for this Month:</span>
             <strong id="gen-preview-existing-count">0</strong>
           </div>
-          <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 0.35rem;">
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-light); padding-top: 0.35rem;">
             <span>Estimated Billing Total:</span>
-            <strong id="gen-preview-total-amount" style="color: var(--accent);">₹0</strong>
+            <strong id="gen-preview-total-amount" style="color: var(--accent-blue);">₹0</strong>
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.75rem;">
-          ✓ Duplicate prevention enabled. Each student receives at most one invoice per billing month.
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.75rem;">
+          ✓ Duplicate prevention enabled. Each student receives at most one invoice per billing cycle.
         </div>
       </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-generate-invoices')">Cancel</button>
         <button type="button" class="btn btn-primary" onclick="MonthlyFeesModule.generateInvoices()">
-          <i data-lucide="zap" style="width: 15px; height: 15px;"></i> Generate Invoices (Unpaid)
+          <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Generate Invoices (Unpaid)
         </button>
       </div>
     </div>
@@ -1403,44 +1532,24 @@
 
       <form onsubmit="PromotionsModule.confirmPromotion(event)">
         <div class="modal-body">
-          <div style="background: var(--surface-alt); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.85rem;">
+          <div style="background: var(--surface-subtle); padding: 0.85rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.85rem; border: 1px solid var(--border-light);">
             <div>Student: <strong id="promo-modal-student-name">—</strong> (<span id="promo-modal-student-id">—</span>)</div>
             <div>Programme: <strong id="promo-modal-programme">—</strong></div>
-            <div>Current Class: <strong id="promo-modal-current-class">—</strong> • Fee: <strong id="promo-modal-current-fee">₹0</strong></div>
+            <div>Current Class: <strong id="promo-modal-current-class">—</strong> • Current Fee: <strong id="promo-modal-current-fee">₹0</strong></div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Promote to Class / Grade <span class="required">*</span></label>
               <select id="promo-new-class-select" class="form-control" onchange="PromotionsModule.onPromotionClassChange()" required>
-                <option value="">Select New Class</option>
-                <option value="UKG">UKG</option>
-                <option value="1st">1st Standard</option>
-                <option value="2nd">2nd Standard</option>
-                <option value="3rd">3rd Standard</option>
-                <option value="4th">4th Standard</option>
-                <option value="5th">5th Standard</option>
-                <option value="6th">6th Standard</option>
-                <option value="7th">7th Standard</option>
-                <option value="8th">8th Standard</option>
-                <option value="9th">9th Standard</option>
-                <option value="10th">10th Standard</option>
-                <option value="11th">11th Standard</option>
-                <option value="12th">12th Standard</option>
-                <option value="Basic">Basic (Hindi)</option>
-                <option value="1st">Grade 1 (Hindi)</option>
-                <option value="2nd">Grade 2 (Hindi)</option>
-                <option value="3rd">Grade 3 (Hindi)</option>
+                <!-- Dynamically populated from master classes -->
               </select>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Board / Mode</label>
+              <label class="form-label">Board / Category</label>
               <select id="promo-new-board-select" class="form-control" onchange="PromotionsModule.onPromotionClassChange()">
-                <option value="Matric">Matric</option>
-                <option value="CBSE">CBSE</option>
-                <option value="Virtual">Virtual</option>
-                <option value="Online">Online</option>
+                <!-- Dynamically populated from master boards -->
               </select>
             </div>
           </div>
@@ -1448,7 +1557,7 @@
           <div class="form-group">
             <label class="form-label">New Monthly Fee (₹) <span class="required">*</span></label>
             <input type="number" id="promo-new-fee-input" class="form-control" min="0" required>
-            <div class="form-hint" id="promo-auto-fee-hint" style="color: var(--accent);">Auto-fetched from fee structure</div>
+            <div class="form-hint" id="promo-auto-fee-hint" style="color: var(--accent-blue);">Auto-fetched from fee structure</div>
           </div>
 
           <div class="form-group">
@@ -1460,7 +1569,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="Utils.closeModal('modal-promote-student')">Cancel</button>
           <button type="submit" class="btn btn-primary">
-            <i data-lucide="trending-up" style="width: 15px; height: 15px;"></i> Confirm Promotion
+            <i data-lucide="trending-up" style="width: 14px; height: 14px;"></i> Confirm Promotion
           </button>
         </div>
       </form>
@@ -1493,7 +1602,7 @@
 
           <div class="form-group">
             <label class="form-label">Description</label>
-            <input type="text" id="programme-description" class="form-control" placeholder="Details">
+            <input type="text" id="programme-description" class="form-control" placeholder="Description of coaching">
           </div>
 
           <div class="form-group">
@@ -1540,7 +1649,7 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">Board / Mode</label>
+              <label class="form-label">Board / Category</label>
               <input type="text" id="fee-board" class="form-control" placeholder="e.g. Matric, CBSE, Virtual">
             </div>
           </div>

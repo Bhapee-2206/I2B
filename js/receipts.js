@@ -39,10 +39,11 @@ const ReceiptsModule = {
     }
   },
 
-  // Render Receipts Table
+  // Render Receipts (Desktop Table & Mobile Cards)
   renderReceiptsTable: () => {
     const tbody = document.getElementById('receipts-table-body');
-    if (!tbody) return;
+    const mobileContainer = document.getElementById('receipts-mobile-cards-list');
+    if (!tbody && !mobileContainer) return;
 
     const searchTerm = (document.getElementById('receipt-search-input')?.value || '').trim().toLowerCase();
     let list = AppState.receipts || [];
@@ -56,58 +57,85 @@ const ReceiptsModule = {
     }
 
     if (list.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="7" class="text-center" style="padding: 3rem 1rem;">
-            <div class="empty-state">
-              <i data-lucide="file-check" class="empty-state-icon"></i>
-              <div class="empty-state-title">No receipts found</div>
-              <div class="empty-state-text">Receipts are automatically created whenever you record a tuition payment.</div>
-            </div>
-          </td>
-        </tr>`;
+      const emptyHtml = `
+        <div class="empty-state">
+          <i data-lucide="file-check" class="empty-state-icon"></i>
+          <div class="empty-state-title">No receipts found</div>
+          <div class="empty-state-text">Receipts are generated automatically whenever you record a tuition payment.</div>
+        </div>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center">${emptyHtml}</td></tr>`;
+      if (mobileContainer) mobileContainer.innerHTML = emptyHtml;
       Utils.renderIcons();
       return;
     }
 
-    tbody.innerHTML = list.map(r => {
-      const student = r.students;
-      const payment = r.payments;
+    // 1. Desktop Table
+    if (tbody) {
+      tbody.innerHTML = list.map(r => {
+        const student = r.students;
+        const payment = r.payments;
 
-      return `
-        <tr>
-          <td>
-            <strong>${Utils.escapeHtml(r.receipt_number)}</strong>
-          </td>
-          <td>
-            ${Utils.formatDate(r.issue_date)}
-          </td>
-          <td>
-            <div style="font-weight: 600;">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">${Utils.escapeHtml(student?.student_id || '')}</div>
-          </td>
-          <td>
-            <strong style="color: var(--success); font-size: 0.95rem;">${Utils.formatCurrency(r.amount_paid)}</strong>
-          </td>
-          <td>
-            <span class="badge badge-neutral">${Utils.escapeHtml(payment?.payment_method || 'Cash')}</span>
-          </td>
-          <td>
-            <span style="font-weight: 600; color: ${r.remaining_balance > 0 ? 'var(--danger)' : 'var(--success)'};">
-              ${Utils.formatCurrency(r.remaining_balance)}
-            </span>
-          </td>
-          <td class="actions-cell">
-            <button class="btn btn-secondary btn-sm" onclick="ReceiptsModule.viewReceipt('${r.id}')" title="View & Download">
-              <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View
-            </button>
-            <button class="btn btn-success btn-sm" onclick="ReceiptsModule.shareViaWhatsApp('${r.id}')" title="Share via WhatsApp">
-              <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+        return `
+          <tr>
+            <td><strong>${Utils.escapeHtml(r.receipt_number)}</strong></td>
+            <td>${Utils.formatDate(r.issue_date)}</td>
+            <td>
+              <div style="font-weight: 600;">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${Utils.escapeHtml(student?.student_id || '')}</div>
+            </td>
+            <td><strong style="color: var(--status-paid); font-size: 0.95rem;">${Utils.formatCurrency(r.amount_paid)}</strong></td>
+            <td><span class="badge badge-neutral">${Utils.escapeHtml(payment?.payment_method || 'Cash')}</span></td>
+            <td>
+              <span style="font-weight: 600; color: ${r.remaining_balance > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">
+                ${Utils.formatCurrency(r.remaining_balance)}
+              </span>
+            </td>
+            <td class="actions-cell">
+              <button class="btn btn-secondary btn-sm" onclick="ReceiptsModule.viewReceipt('${r.id}')" title="View & Download">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View
+              </button>
+              <button class="btn btn-success btn-sm" onclick="ReceiptsModule.shareViaWhatsApp('${r.id}')" title="Share via WhatsApp">
+                <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 2. Mobile Cards
+    if (mobileContainer) {
+      mobileContainer.innerHTML = list.map(r => {
+        const student = r.students;
+        const payment = r.payments;
+
+        return `
+          <div class="student-mobile-card">
+            <div class="student-card-top">
+              <div>
+                <div class="student-card-name">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
+                <div class="student-card-parent">${Utils.escapeHtml(r.receipt_number)} • ${Utils.formatDate(r.issue_date)}</div>
+              </div>
+              <strong style="color: var(--status-paid); font-size: 1.1rem;">${Utils.formatCurrency(r.amount_paid)}</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+              <span>Mode: <strong>${Utils.escapeHtml(payment?.payment_method || 'Cash')}</strong></span>
+              <span>Pending: <strong style="color: ${r.remaining_balance > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(r.remaining_balance)}</strong></span>
+            </div>
+
+            <div class="student-card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="ReceiptsModule.viewReceipt('${r.id}')">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View Receipt
+              </button>
+              <button class="btn btn-success btn-sm" onclick="ReceiptsModule.shareViaWhatsApp('${r.id}')">
+                <i data-lucide="message-circle" style="width: 14px; height: 14px;"></i> WhatsApp
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     Utils.renderIcons();
   },
@@ -134,7 +162,7 @@ const ReceiptsModule = {
     document.getElementById('receipt-view-ref').textContent = p?.transaction_reference || 'None';
     document.getElementById('receipt-view-balance').textContent = Utils.formatCurrency(r.remaining_balance);
 
-    document.getElementById('receipt-institution-name').textContent = inst?.institution_name || 'I2B Educational Institution';
+    document.getElementById('receipt-institution-name').textContent = inst?.institution_name || 'EduTrack Institution';
     document.getElementById('receipt-institution-address').textContent = inst?.address || '';
     document.getElementById('receipt-footer-text').textContent = inst?.receipt_footer || 'Thank you for your payment!';
 
@@ -163,106 +191,106 @@ const ReceiptsModule = {
       const s = r.students;
       const p = r.payments;
 
-      // Header Banner
-      doc.setFillColor(15, 23, 42); // Navy #0f172a
+      // Header Banner (Navy #0f172a)
+      doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, 148, 28, 'F');
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
+      doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.text(inst?.institution_name || "I2B EDUCATIONAL INSTITUTION", 14, 12);
+      doc.text(inst?.institution_name || "EDUTRACK INSTITUTION", 14, 11);
 
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(inst?.subtitle || "Student, Tuition & Fee Management", 14, 18);
-      doc.text(inst?.contact_phone ? `Phone: ${inst.contact_phone} | Email: ${inst.contact_email || ''}` : '', 14, 23);
+      doc.text(inst?.subtitle || "Student & Monthly Fee Management", 14, 17);
+      doc.text(inst?.contact_phone ? `Phone: ${inst.contact_phone} | Email: ${inst.contact_email || ''}` : '', 14, 22);
 
-      // Receipt Title Box
+      // Receipt Box
       doc.setFillColor(241, 245, 249);
-      doc.roundedRect(14, 33, 120, 14, 2, 2, 'F');
+      doc.roundedRect(14, 32, 120, 13, 2, 2, 'F');
 
       doc.setTextColor(15, 23, 42);
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
       doc.setFont('helvetica', 'bold');
-      doc.text("OFFICIAL PAYMENT RECEIPT", 18, 41);
+      doc.text("OFFICIAL PAYMENT RECEIPT", 18, 40);
 
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Receipt #: ${r.receipt_number}`, 78, 39);
-      doc.text(`Date: ${Utils.formatDate(r.issue_date)}`, 78, 44);
+      doc.text(`Receipt #: ${r.receipt_number}`, 78, 38);
+      doc.text(`Date: ${Utils.formatDate(r.issue_date)}`, 78, 43);
 
       // Student Info
       doc.setFontSize(9);
-      doc.text("Student ID:", 14, 55);
+      doc.text("Student ID:", 14, 53);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${s?.student_id || '—'}`, 40, 55);
+      doc.text(`${s?.student_id || '—'}`, 40, 53);
 
       doc.setFont('helvetica', 'normal');
-      doc.text("Student Name:", 14, 62);
+      doc.text("Student Name:", 14, 60);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${s?.name || '—'}`, 40, 62);
+      doc.text(`${s?.name || '—'}`, 40, 60);
 
       doc.setFont('helvetica', 'normal');
-      doc.text("Parent Name:", 14, 69);
-      doc.text(`${s?.parent_name || '—'}`, 40, 69);
+      doc.text("Parent Name:", 14, 67);
+      doc.text(`${s?.parent_name || '—'}`, 40, 67);
 
-      doc.text("Phone / WA:", 14, 76);
-      doc.text(`${s?.whatsapp_number || '—'}`, 40, 76);
+      doc.text("WhatsApp Phone:", 14, 74);
+      doc.text(`${s?.whatsapp_number || '—'}`, 40, 74);
 
-      // Divider
+      // Line
       doc.setDrawColor(226, 232, 240);
-      doc.line(14, 82, 134, 82);
+      doc.line(14, 80, 134, 80);
 
-      // Payment Details Table
+      // Table Header
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text("Description", 14, 90);
-      doc.text("Payment Mode", 70, 90);
-      doc.text("Amount (INR)", 110, 90);
+      doc.setFontSize(8.5);
+      doc.text("Description", 14, 88);
+      doc.text("Payment Mode", 70, 88);
+      doc.text("Amount Received", 106, 88);
 
       doc.setFont('helvetica', 'normal');
-      doc.text("Tuition Fee Collection", 14, 98);
-      doc.text(`${p?.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 70, 98);
+      doc.text("Tuition Fee Collection", 14, 96);
+      doc.text(`${p?.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 70, 96);
       
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(16, 185, 129); // Green
-      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 110, 98);
+      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 106, 96);
 
-      // Divider
+      // Line
       doc.setDrawColor(226, 232, 240);
-      doc.line(14, 106, 134, 106);
+      doc.line(14, 104, 134, 104);
 
-      // Financial Summary Box
+      // Financial Summary
       doc.setTextColor(15, 23, 42);
       doc.setFont('helvetica', 'normal');
-      doc.text("Total Amount Received:", 65, 115);
+      doc.text("Total Paid This Transaction:", 55, 113);
       doc.setFont('helvetica', 'bold');
-      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 110, 115);
+      doc.text(`INR ${r.amount_paid.toLocaleString('en-IN')}`, 110, 113);
 
       doc.setFont('helvetica', 'normal');
-      doc.text("Remaining Balance Pending:", 65, 122);
+      doc.text("Remaining Balance Pending:", 55, 120);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(r.remaining_balance > 0 ? 239 : 16, r.remaining_balance > 0 ? 68 : 185, r.remaining_balance > 0 ? 68 : 129);
-      doc.text(`INR ${r.remaining_balance.toLocaleString('en-IN')}`, 110, 122);
+      doc.text(`INR ${r.remaining_balance.toLocaleString('en-IN')}`, 110, 120);
 
       // Footer
       doc.setTextColor(100, 116, 139);
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'italic');
-      doc.text(inst?.receipt_footer || "This is a computer generated receipt. Thank you for your payment!", 14, 140);
+      doc.text(inst?.receipt_footer || "This is an official computer generated receipt. Thank you for your payment!", 14, 138);
 
-      // Authorized Signatory
+      // Signatory
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text("Authorized Signatory", 100, 155);
-      doc.line(95, 150, 134, 150);
+      doc.text("Authorized Signatory", 100, 153);
+      doc.line(95, 148, 134, 148);
 
       doc.save(`Receipt_${r.receipt_number}.pdf`);
       Utils.showToast("Receipt Downloaded", `Receipt ${r.receipt_number} saved as PDF`, "success");
 
     } catch (e) {
       console.error("PDF generation error:", e);
-      Utils.showToast("PDF Error", "Failed to generate PDF. You can use Print instead.", "warning");
+      Utils.showToast("Notice", "Failed to generate PDF. You can use Print instead.", "warning");
     }
   },
 
@@ -271,7 +299,7 @@ const ReceiptsModule = {
     window.print();
   },
 
-  // Share Receipt through WhatsApp (Part 14)
+  // Share Receipt through WhatsApp (Section 12)
   shareViaWhatsApp: (receiptId) => {
     const r = AppState.receipts.find(item => item.id === receiptId);
     if (!r) return;
@@ -285,10 +313,10 @@ const ReceiptsModule = {
       return;
     }
 
-    const orgName = inst?.institution_name || "I2B Educational Institution";
+    const orgName = inst?.institution_name || "EduTrack Tuition Centre";
     const msg = `Dear Parent,
 
-We have received your payment.
+We have received your tuition fee payment.
 
 Student: ${s.name}
 Amount Received: ₹${r.amount_paid.toLocaleString('en-IN')}
@@ -300,7 +328,7 @@ Thank you.
 Regards,
 ${orgName}`;
 
-    // Prompt user about attaching the PDF manually
+    // Prompt admin about attaching downloaded PDF
     const downloadFirst = confirm(
       `WhatsApp will now open for ${s.name} (${s.whatsapp_number}).\n\n` +
       `Important Notice:\nClick-to-chat cannot automatically attach a PDF.\n\n` +

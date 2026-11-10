@@ -34,10 +34,11 @@ const MonthlyFeesModule = {
     }
   },
 
-  // Render Monthly Fees Table
+  // Render Monthly Fees (Desktop Table & Mobile Cards)
   renderMonthlyFeesTable: () => {
     const tbody = document.getElementById('monthly-fees-table-body');
-    if (!tbody) return;
+    const mobileContainer = document.getElementById('monthly-fees-mobile-cards-list');
+    if (!tbody && !mobileContainer) return;
 
     const month = parseInt(document.getElementById('monthly-fee-filter-month')?.value || MonthlyFeesModule.selectedMonth, 10);
     const year = parseInt(document.getElementById('monthly-fee-filter-year')?.value || MonthlyFeesModule.selectedYear, 10);
@@ -48,7 +49,7 @@ const MonthlyFeesModule = {
       list = list.filter(inv => inv.status === statusFilter);
     }
 
-    // Summary calculations
+    // Calculations
     const expected = list.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0);
     const collected = list.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
     const pending = list.reduce((sum, inv) => sum + (parseFloat(inv.balance_amount) || 0), 0);
@@ -62,70 +63,94 @@ const MonthlyFeesModule = {
     if (penEl) penEl.textContent = Utils.formatCurrency(pending);
 
     if (list.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="7" class="text-center" style="padding: 3rem 1rem;">
-            <div class="empty-state">
-              <i data-lucide="calendar" class="empty-state-icon"></i>
-              <div class="empty-state-title">No invoices generated for ${Utils.formatMonthYear(month, year)}</div>
-              <div class="empty-state-text">Click "Generate Monthly Fees" to create fee records for all active students.</div>
-              <button class="btn btn-primary" onclick="MonthlyFeesModule.openGenerateModal()">
-                <i data-lucide="zap" style="width: 16px; height: 16px;"></i> Generate Invoices Now
-              </button>
-            </div>
-          </td>
-        </tr>`;
+      const emptyHtml = `
+        <div class="empty-state">
+          <i data-lucide="calendar" class="empty-state-icon"></i>
+          <div class="empty-state-title">No invoices generated for ${Utils.formatMonthYear(month, year)}</div>
+          <div class="empty-state-text">Click "Generate Monthly Fees" to create fee records for all active students.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" onclick="MonthlyFeesModule.openGenerateModal()">
+            <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Generate Invoices Now
+          </button>
+        </div>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center">${emptyHtml}</td></tr>`;
+      if (mobileContainer) mobileContainer.innerHTML = emptyHtml;
       Utils.renderIcons();
       return;
     }
 
-    tbody.innerHTML = list.map(inv => {
-      const student = inv.students;
-      const progNames = (inv.invoice_items || []).map(item => item.description).join(', ') || 'Tuition Fee';
+    // 1. Desktop Table
+    if (tbody) {
+      tbody.innerHTML = list.map(inv => {
+        const student = inv.students;
+        const progNames = (inv.invoice_items || []).map(item => item.description).join(', ') || 'Tuition Fee';
 
-      return `
-        <tr>
-          <td>
-            <strong>${Utils.escapeHtml(inv.invoice_number)}</strong>
-          </td>
-          <td>
-            <div style="font-weight: 600;">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">${Utils.escapeHtml(student?.student_id || '')}</div>
-          </td>
-          <td>
-            <span style="font-size: 0.82rem; color: var(--text-muted);">${Utils.escapeHtml(progNames)}</span>
-          </td>
-          <td>
-            <strong>${Utils.formatCurrency(inv.total_amount)}</strong>
-          </td>
-          <td>
-            <span style="color: var(--success); font-weight: 600;">${Utils.formatCurrency(inv.paid_amount)}</span>
-          </td>
-          <td>
-            <strong style="color: ${inv.balance_amount > 0 ? 'var(--danger)' : 'var(--success)'};">
-              ${Utils.formatCurrency(inv.balance_amount)}
-            </strong>
-          </td>
-          <td>
-            <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
-              <span class="badge-dot"></span>
-              ${inv.status}
-            </span>
-          </td>
-          <td class="actions-cell">
+        return `
+          <tr>
+            <td><strong>${Utils.escapeHtml(inv.invoice_number)}</strong></td>
+            <td>
+              <div style="font-weight: 600;">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${Utils.escapeHtml(student?.student_id || '')}</div>
+            </td>
+            <td><span style="font-size: 0.8rem; color: var(--text-muted);">${Utils.escapeHtml(progNames)}</span></td>
+            <td><strong>${Utils.formatCurrency(inv.total_amount)}</strong></td>
+            <td><span style="color: var(--status-paid); font-weight: 600;">${Utils.formatCurrency(inv.paid_amount)}</span></td>
+            <td>
+              <strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">
+                ${Utils.formatCurrency(inv.balance_amount)}
+              </strong>
+            </td>
+            <td>
+              <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
+                <span class="badge-dot"></span>
+                ${inv.status}
+              </span>
+            </td>
+            <td class="actions-cell">
+              ${inv.balance_amount > 0 ? `
+                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
+                </button>
+              ` : `
+                <span style="font-size: 0.78rem; color: var(--status-paid); font-weight: 600;">Settled</span>
+              `}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 2. Mobile Cards
+    if (mobileContainer) {
+      mobileContainer.innerHTML = list.map(inv => {
+        const student = inv.students;
+        return `
+          <div class="student-mobile-card">
+            <div class="student-card-top">
+              <div>
+                <div class="student-card-name">${Utils.escapeHtml(student?.name || 'Unknown')}</div>
+                <div class="student-card-parent">${Utils.escapeHtml(inv.invoice_number)} • Due: ${Utils.formatDate(inv.due_date)}</div>
+              </div>
+              <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
+                ${inv.status}
+              </span>
+            </div>
+
+            <div class="student-card-financials">
+              <div>Total: <strong>${Utils.formatCurrency(inv.total_amount)}</strong></div>
+              <div>Pending: <strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(inv.balance_amount)}</strong></div>
+            </div>
+
             ${inv.balance_amount > 0 ? `
-              <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
-                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
-              </button>
-            ` : `
-              <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5;">
-                <i data-lucide="check" style="width: 14px; height: 14px;"></i> Settled
-              </button>
-            `}
-          </td>
-        </tr>
-      `;
-    }).join('');
+              <div class="student-card-actions">
+                <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${inv.student_id}', '${inv.id}')">
+                  <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Due (₹${inv.balance_amount})
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
 
     Utils.renderIcons();
   },
@@ -145,10 +170,9 @@ const MonthlyFeesModule = {
     const month = parseInt(document.getElementById('gen-month-select').value, 10);
     const year = parseInt(document.getElementById('gen-year-select').value, 10);
 
-    // Active students
     const activeStudents = AppState.students.filter(s => s.status === 'active');
     
-    // Check existing invoices for this month/year
+    // Check existing invoices for this month/year (duplicate prevention)
     const existingStudentIds = new Set(
       AppState.invoices
         .filter(inv => inv.billing_month === month && inv.billing_year === year && inv.status !== 'cancelled')
@@ -186,7 +210,7 @@ const MonthlyFeesModule = {
     try {
       const now = new Date();
       const defaultDueDay = AppState.institution?.default_due_day || 10;
-      const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(defaultDueDay).padStart(2, '0')}`;
+      const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(Math.min(defaultDueDay, 28)).padStart(2, '0')}`;
 
       let createdCount = 0;
 

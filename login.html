@@ -2,84 +2,149 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EduTrack – Administrator Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>EduTrack – Administrator Sign In</title>
+  
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/responsive.css">
+  
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
   <style>
     body {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: radial-gradient(circle at top right, #1e293b, #0f172a);
-      padding: 1.5rem;
+      background: #0f172a;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%);
+      padding: 1rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     }
+    
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+      animation: fadeIn 0.3s ease-out;
+    }
+
     .login-card {
       background: #ffffff;
       border-radius: var(--radius-lg);
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      width: 100%;
-      max-width: 440px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
     }
+
     .login-header {
-      background: #0f172a;
-      color: #ffffff;
-      padding: 2rem 1.75rem 1.75rem 1.75rem;
+      padding: 2.25rem 2rem 1.5rem 2rem;
       text-align: center;
-      border-bottom: 1px solid #1e293b;
     }
-    .login-brand-logo {
-      width: 54px;
-      height: 54px;
+
+    .login-logo {
+      width: 56px;
+      height: 56px;
       border-radius: var(--radius-md);
       object-fit: cover;
-      margin-bottom: 0.75rem;
+      margin: 0 auto 1rem auto;
+      display: block;
+      box-shadow: var(--shadow-md);
+      border: 2px solid var(--border-color);
       background: #ffffff;
-      padding: 2px;
     }
+
+    .login-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+    }
+
+    .login-subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 0.3rem;
+    }
+
     .login-body {
-      padding: 2rem 1.75rem;
+      padding: 0 2rem 2.25rem 2rem;
+    }
+
+    .login-error-alert {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-left: 4px solid #ef4444;
+      padding: 0.75rem 0.85rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      color: #991b1b;
+      margin-bottom: 1.25rem;
+      line-height: 1.4;
+    }
+
+    .login-footer-notice {
+      margin-top: 1.5rem;
+      text-align: center;
+      font-size: 0.78rem;
+      color: #64748b;
+      line-height: 1.5;
     }
   </style>
 </head>
 <body>
 
-  <div class="login-card">
-    <div class="login-header">
-      <img src="assets/logo/logo.jpg" alt="EduTrack Logo" class="login-brand-logo">
-      <h1 style="font-size: 1.35rem; font-weight: 800; color: #ffffff;">EduTrack</h1>
-      <p style="font-size: 0.82rem; color: #94a3b8; margin-top: 0.2rem;">Tuition & Fee Management Portal</p>
-    </div>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <img src="assets/logo/logo.jpg" alt="EduTrack Logo" class="login-logo">
+        <h1 class="login-title">EduTrack</h1>
+        <p class="login-subtitle">Tuition & Monthly Fee Management System</p>
+      </div>
 
-    <div class="login-body">
-      <form id="login-form" onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label class="form-label">Administrator Email</label>
-          <input type="email" id="login-email" class="form-control" value="admin@i2b-edu.com" required>
+      <div class="login-body">
+        <div id="login-error-box" class="login-error-alert"></div>
+
+        <form id="admin-login-form" onsubmit="executeLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="login-email">Administrator Email</label>
+            <input 
+              type="email" 
+              id="login-email" 
+              class="form-control" 
+              placeholder="admin@edutrack.org" 
+              required 
+              autocomplete="email"
+              style="min-height: 44px;"
+            >
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label class="form-label" for="login-password">Password</label>
+            <input 
+              type="password" 
+              id="login-password" 
+              class="form-control" 
+              placeholder="••••••••••••" 
+              required 
+              autocomplete="current-password"
+              style="min-height: 44px;"
+            >
+          </div>
+
+          <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width: 100%; min-height: 46px; font-size: 0.95rem;">
+            <i data-lucide="lock" style="width: 16px; height: 16px;"></i>
+            <span>Sign In to Dashboard</span>
+          </button>
+        </form>
+
+        <div class="login-footer-notice">
+          Private administrative access portal.<br>
+          Authorized administrators only.
         </div>
-
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; font-size: 0.85rem;">
-          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--text-muted);">
-            <input type="checkbox" checked>
-            <span>Remember session</span>
-          </label>
-        </div>
-
-        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
-          <i data-lucide="log-in" style="width: 16px; height: 16px;"></i> Sign In to Dashboard
-        </button>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -87,49 +152,53 @@
 
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/auth.js"></script>
   <script>
     Utils.renderIcons();
 
-    async function handleLogin(e) {
+    // Check if session already active
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+          window.location.href = "index.html#dashboard";
+        }
+      }
+    });
+
+    async function executeLogin(e) {
       e.preventDefault();
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value.trim();
+      const errorBox = document.getElementById('login-error-box');
+      const submitBtn = document.getElementById('login-submit-btn');
 
-      if (!email || !password) {
-        Utils.showToast("Required", "Please enter your email and password", "warning");
-        return;
-      }
+      errorBox.style.display = 'none';
+      errorBox.textContent = '';
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span>Authenticating...</span>`;
 
       try {
-        let signedIn = false;
-        if (supabaseClient) {
-          const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email,
-            password
-          });
-          if (!error && data?.session) {
-            signedIn = true;
-          }
-        }
-
-        // Single administrator session persistence
-        const adminSession = {
-          email: email || "admin@i2b-edu.com",
-          role: "Administrator",
-          signedInAt: new Date().toISOString()
-        };
-        localStorage.setItem('edutrack_admin_session', JSON.stringify(adminSession));
-
-        Utils.showToast("Welcome Back", "Signed in successfully. Loading dashboard...", "success");
+        await AuthModule.login(email, password);
+        Utils.showToast("Signed In", "Authentication successful. Opening dashboard...", "success");
         setTimeout(() => {
           window.location.href = "index.html#dashboard";
-        }, 700);
-
+        }, 500);
       } catch (err) {
-        console.error("Login notice:", err);
-        const adminSession = { email, role: "Administrator" };
-        localStorage.setItem('edutrack_admin_session', JSON.stringify(adminSession));
-        window.location.href = "index.html#dashboard";
+        console.error("Login failure:", err);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i data-lucide="lock" style="width: 16px; height: 16px;"></i> <span>Sign In to Dashboard</span>`;
+        Utils.renderIcons();
+
+        let message = err.message || "Invalid login credentials.";
+        if (message.toLowerCase().includes("email not confirmed")) {
+          message = "Your email is not confirmed in Supabase Auth yet. In your Supabase Dashboard > Authentication > Users, please confirm this user or disable 'Confirm email' under Auth Settings.";
+        } else if (message.toLowerCase().includes("invalid login credentials")) {
+          message = "Invalid email or password. Please verify your credentials.";
+        }
+
+        errorBox.textContent = message;
+        errorBox.style.display = 'block';
       }
     }
   </script>

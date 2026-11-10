@@ -1,48 +1,78 @@
 /**
  * EDUTRACK AUTHENTICATION & AUDIT LOGGING MODULE
+ * Strict Supabase Session Verification & Audit Trail
  */
 
 const AuthModule = {
-  // Check if admin is currently authenticated
+  // Check if admin is currently authenticated with a real Supabase session
   init: async () => {
     try {
-      if (supabaseClient) {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (session && session.user) {
-          AppState.user = session.user;
-        } else {
-          // Check localStorage for offline / single-admin session fallback
-          const localAdmin = localStorage.getItem('edutrack_admin_session');
-          if (localAdmin) {
-            AppState.user = JSON.parse(localAdmin);
-          } else {
-            // Default active administrative profile for single-admin deployment
-            AppState.user = {
-              email: "admin@i2b-edu.com",
-              role: "Administrator",
-              id: "admin-system-id"
-            };
-            localStorage.setItem('edutrack_admin_session', JSON.stringify(AppState.user));
-          }
-        }
+      if (!supabaseClient) {
+        console.error("Supabase client is not available.");
+        return false;
       }
-      AuthModule.updateUI();
+
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      
+      const isLoginPage = window.location.pathname.endsWith('login.html');
+
+      if (session && session.user) {
+        AppState.user = session.user;
+        AuthModule.updateUI();
+
+        // If on login page with active session, redirect to dashboard
+        if (isLoginPage) {
+          window.location.href = "index.html#dashboard";
+        }
+        return true;
+      } else {
+        AppState.user = null;
+        
+        // If on private management dashboard without active session, redirect to login
+        if (!isLoginPage && !window.location.hash.includes('preview')) {
+          console.warn("Unauthenticated access attempt. Redirecting to login.html...");
+          window.location.href = "login.html";
+        }
+        return false;
+      }
     } catch (err) {
-      console.warn("Auth initialization notice:", err);
-      AppState.user = {
-        email: "admin@i2b-edu.com",
-        role: "Administrator"
-      };
-      AuthModule.updateUI();
+      console.error("Auth check error:", err);
+      if (!window.location.pathname.endsWith('login.html')) {
+        window.location.href = "login.html";
+      }
+      return false;
     }
   },
 
-  // Update header and sidebar with admin details
+  // Perform authentic Supabase login
+  login: async (email, password) => {
+    if (!supabaseClient) {
+      throw new Error("Supabase client is not initialized.");
+    }
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || !data.session) {
+      throw new Error("Failed to establish authenticated session.");
+    }
+
+    AppState.user = data.session.user;
+    return data.session;
+  },
+
+  // Update header and sidebar with authenticated admin details
   updateUI: () => {
     const adminEmailEls = document.querySelectorAll('.admin-email-text');
     const adminRoleEls = document.querySelectorAll('.admin-role-text');
-    const email = AppState.user?.email || "admin@i2b-edu.com";
-    const role = "Administrator";
+    const email = AppState.user?.email || "Administrator";
+    const role = "Master Admin";
 
     adminEmailEls.forEach(el => el.textContent = email);
     adminRoleEls.forEach(el => el.textContent = role);
@@ -55,30 +85,29 @@ const AuthModule = {
       const logEntry = {
         action,
         entity_type: entityType,
-        entity_id: entityId,
+        entity_id: String(entityId || ''),
         details: typeof details === 'object' ? details : { info: details },
-        actor_email: AppState.user?.email || "admin@i2b-edu.com"
+        actor_email: AppState.user?.email || "admin@edutrack.org",
+        created_at: new Date().toISOString()
       };
       await supabaseClient.from('audit_logs').insert([logEntry]);
     } catch (e) {
-      console.error("Audit log error:", e);
+      console.warn("Audit log notice:", e);
     }
   },
 
-  // Logout
+  // Logout cleanly
   logout: async () => {
-    if (confirm("Are you sure you want to log out of the administration panel?")) {
+    if (confirm("Are you sure you want to sign out of the EduTrack Administration panel?")) {
       try {
         if (supabaseClient) {
           await supabaseClient.auth.signOut();
         }
-      } catch (e) {}
-      localStorage.removeItem('edutrack_admin_session');
-      Utils.showToast("Logged out", "You have been logged out.", "info");
-      setTimeout(() => {
-        window.location.hash = "#dashboard";
-        window.location.reload();
-      }, 500);
+      } catch (e) {
+        console.error("Sign out error:", e);
+      }
+      AppState.user = null;
+      window.location.href = "login.html";
     }
   }
 };

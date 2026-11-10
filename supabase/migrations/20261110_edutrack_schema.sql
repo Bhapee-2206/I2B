@@ -29,7 +29,36 @@ CREATE TABLE IF NOT EXISTS public.institution_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. PROGRAMMES TABLE
+-- 2. ACADEMIC YEARS TABLE
+CREATE TABLE IF NOT EXISTS public.academic_years (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    year_name TEXT UNIQUE NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    is_active BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. MASTER CLASSES AND BOARDS
+CREATE TABLE IF NOT EXISTS public.master_classes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    class_name TEXT UNIQUE NOT NULL,
+    category TEXT DEFAULT 'school',
+    sort_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.master_boards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    board_name TEXT UNIQUE NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. PROGRAMMES TABLE
 CREATE TABLE IF NOT EXISTS public.programmes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code TEXT UNIQUE NOT NULL,
@@ -42,7 +71,7 @@ CREATE TABLE IF NOT EXISTS public.programmes (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. STUDENTS TABLE
+-- 5. STUDENTS TABLE
 CREATE TABLE IF NOT EXISTS public.students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id TEXT UNIQUE NOT NULL,
@@ -58,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.students (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. ENROLLMENTS TABLE (Students can attend multiple programmes)
+-- 6. ENROLLMENTS TABLE (Students can attend multiple programmes)
 CREATE TABLE IF NOT EXISTS public.enrollments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
@@ -75,7 +104,25 @@ CREATE TABLE IF NOT EXISTS public.enrollments (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. FEE STRUCTURES TABLE (Single Source of Truth)
+-- 7. CLASS PROMOTION HISTORY TABLE
+CREATE TABLE IF NOT EXISTS public.class_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    enrollment_id UUID NOT NULL REFERENCES public.enrollments(id) ON DELETE CASCADE,
+    academic_year_id UUID REFERENCES public.academic_years(id) ON DELETE SET NULL,
+    old_class TEXT NOT NULL,
+    new_class TEXT NOT NULL,
+    old_board TEXT,
+    new_board TEXT,
+    old_fee NUMERIC(10,2) NOT NULL,
+    new_fee NUMERIC(10,2) NOT NULL,
+    effective_date DATE DEFAULT CURRENT_DATE,
+    promoted_by TEXT DEFAULT 'Administrator',
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. FEE STRUCTURES TABLE (Single Source of Truth)
 CREATE TABLE IF NOT EXISTS public.fee_structures (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     programme_id UUID NOT NULL REFERENCES public.programmes(id) ON DELETE CASCADE,
@@ -88,7 +135,7 @@ CREATE TABLE IF NOT EXISTS public.fee_structures (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. MONTHLY INVOICES TABLE
+-- 9. MONTHLY INVOICES TABLE
 CREATE TABLE IF NOT EXISTS public.invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_number TEXT UNIQUE NOT NULL,
@@ -107,19 +154,19 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     CONSTRAINT uq_student_monthly_invoice UNIQUE (student_id, billing_month, billing_year)
 );
 
--- 7. INVOICE ITEMS TABLE
+-- 10. INVOICE ITEMS TABLE
 CREATE TABLE IF NOT EXISTS public.invoice_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id UUID NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
     enrollment_id UUID REFERENCES public.enrollments(id) ON DELETE SET NULL,
-    programme_id UUID REFERENCES public.programmes(id) ON DELETE SET NULL,
+    programme_id REFERENCES public.programmes(id) ON DELETE SET NULL,
     description TEXT NOT NULL,
     class_or_grade TEXT,
     amount NUMERIC(10,2) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. PAYMENTS TABLE (Recorded Separately from Registration)
+-- 11. PAYMENTS TABLE (Recorded Separately from Registration)
 CREATE TABLE IF NOT EXISTS public.payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     payment_number TEXT UNIQUE NOT NULL,
@@ -134,7 +181,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. PAYMENT ALLOCATIONS TABLE
+-- 12. PAYMENT ALLOCATIONS TABLE
 CREATE TABLE IF NOT EXISTS public.payment_allocations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     payment_id UUID NOT NULL REFERENCES public.payments(id) ON DELETE CASCADE,
@@ -143,7 +190,7 @@ CREATE TABLE IF NOT EXISTS public.payment_allocations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. RECEIPTS TABLE
+-- 13. RECEIPTS TABLE
 CREATE TABLE IF NOT EXISTS public.receipts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     receipt_number TEXT UNIQUE NOT NULL,
@@ -159,14 +206,26 @@ CREATE TABLE IF NOT EXISTS public.receipts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. AUDIT LOGS TABLE
+-- 14. ADMIN USERS TABLE
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    auth_user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT NOT NULL DEFAULT 'Administrator',
+    role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin', 'staff')),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 15. AUDIT LOGS TABLE
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     action TEXT NOT NULL,
     entity_type TEXT NOT NULL,
     entity_id TEXT,
     details JSONB DEFAULT '{}'::jsonb,
-    actor_email TEXT DEFAULT 'admin@i2b-edu.com',
+    actor_email TEXT DEFAULT 'admin@edutrack.org',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -177,16 +236,22 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_status ON public.enrollments(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_student_period ON public.invoices(student_id, billing_year, billing_month);
 CREATE INDEX IF NOT EXISTS idx_payments_student ON public.payments(student_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_payment ON public.receipts(payment_id);
+CREATE INDEX IF NOT EXISTS idx_class_history_student ON public.class_history(student_id);
 
 -- ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.institution_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.academic_years ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.master_classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.master_boards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.programmes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.class_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fee_structures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;

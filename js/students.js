@@ -1,6 +1,7 @@
 /**
  * EDUTRACK STUDENT MANAGEMENT MODULE
- * Multi-Programme Single-Form Registration, Student Directory & Comprehensive Profile
+ * Multi-Programme Single-Form Registration, Full Student Editing,
+ * Desktop Table Directory & Mobile Student Cards
  */
 
 const StudentsModule = {
@@ -11,7 +12,7 @@ const StudentsModule = {
     await StudentsModule.loadStudents();
   },
 
-  // Load students with enrollments and payments
+  // Load students with enrollments, invoices, and payments
   loadStudents: async () => {
     try {
       if (!supabaseClient) return [];
@@ -38,7 +39,7 @@ const StudentsModule = {
     }
   },
 
-  // Calculate combined monthly fee for a student
+  // Calculate combined monthly fee for active enrolments
   calculateMonthlyFee: (student) => {
     if (!student || !student.enrollments) return 0;
     return student.enrollments
@@ -48,8 +49,8 @@ const StudentsModule = {
 
   // Calculate outstanding balance across all invoices
   calculateOutstandingBalance: (student) => {
-    if (!student || !student.invoices || student.invoices.length === 0) {
-      // If no invoices generated yet, the pending balance is their current combined monthly fee
+    if (!student) return 0;
+    if (!student.invoices || student.invoices.length === 0) {
       return StudentsModule.calculateMonthlyFee(student);
     }
     return student.invoices
@@ -57,14 +58,12 @@ const StudentsModule = {
       .reduce((sum, inv) => sum + (parseFloat(inv.balance_amount) || 0), 0);
   },
 
-  // Determine overall payment status for student
+  // Determine overall payment status
   getPaymentStatus: (student) => {
-    const monthlyFee = StudentsModule.calculateMonthlyFee(student);
     if (!student.invoices || student.invoices.length === 0) {
       return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
     }
 
-    // Check latest invoice
     const activeInvoices = student.invoices
       .filter(inv => inv.status !== 'cancelled')
       .sort((a, b) => (b.billing_year * 100 + b.billing_month) - (a.billing_year * 100 + a.billing_month));
@@ -74,19 +73,20 @@ const StudentsModule = {
     }
 
     const latest = activeInvoices[0];
-    if (latest.status === 'paid' || latest.balance_amount <= 0) {
+    if (latest.status === 'paid' || parseFloat(latest.balance_amount) <= 0) {
       return { status: 'paid', label: 'Paid', class: 'badge-paid' };
-    } else if (latest.paid_amount > 0) {
+    } else if (parseFloat(latest.paid_amount) > 0) {
       return { status: 'partially_paid', label: 'Partial', class: 'badge-partial' };
     } else {
       return { status: 'unpaid', label: 'Unpaid', class: 'badge-unpaid' };
     }
   },
 
-  // Render Student Directory Table
+  // Render Student Directory (Both Desktop Table & Mobile Cards)
   renderStudentsTable: () => {
     const tbody = document.getElementById('students-table-body');
-    if (!tbody) return;
+    const mobileContainer = document.getElementById('students-mobile-cards-list');
+    if (!tbody && !mobileContainer) return;
 
     const searchTerm = (document.getElementById('student-search-input')?.value || '').trim().toLowerCase();
     const filterProg = document.getElementById('student-filter-programme')?.value || '';
@@ -95,7 +95,7 @@ const StudentsModule = {
 
     let list = AppState.students || [];
 
-    // Apply Search
+    // Search
     if (searchTerm) {
       list = list.filter(s => 
         (s.name && s.name.toLowerCase().includes(searchTerm)) ||
@@ -105,7 +105,7 @@ const StudentsModule = {
       );
     }
 
-    // Apply Filters
+    // Filters
     if (filterProg) {
       list = list.filter(s => s.enrollments?.some(e => e.status === 'active' && e.programme_id === filterProg));
     }
@@ -116,93 +116,143 @@ const StudentsModule = {
       list = list.filter(s => StudentsModule.getPaymentStatus(s).status === filterPayment);
     }
 
-    // Update Counter
+    // Counter badge
     const countBadge = document.getElementById('student-count-badge');
     if (countBadge) countBadge.textContent = `${list.length} student${list.length === 1 ? '' : 's'}`;
 
+    // Handle Empty State
     if (list.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="8" class="text-center" style="padding: 3rem 1rem;">
-            <div class="empty-state">
-              <i data-lucide="users" class="empty-state-icon"></i>
-              <div class="empty-state-title">No students found</div>
-              <div class="empty-state-text">Try adjusting your search filters or click 'Add Student' to register.</div>
-            </div>
-          </td>
-        </tr>`;
+      const emptyHtml = `
+        <div class="empty-state">
+          <i data-lucide="users" class="empty-state-icon"></i>
+          <div class="empty-state-title">No students found</div>
+          <div class="empty-state-text">No records match your active search or filters.</div>
+        </div>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center">${emptyHtml}</td></tr>`;
+      if (mobileContainer) mobileContainer.innerHTML = emptyHtml;
       Utils.renderIcons();
       return;
     }
 
-    tbody.innerHTML = list.map(s => {
-      const activeEnrollments = (s.enrollments || []).filter(e => e.status === 'active');
-      const monthlyFee = StudentsModule.calculateMonthlyFee(s);
-      const pendingBal = StudentsModule.calculateOutstandingBalance(s);
-      const payStatus = StudentsModule.getPaymentStatus(s);
+    // 1. Desktop Table Rows
+    if (tbody) {
+      tbody.innerHTML = list.map(s => {
+        const activeEnrollments = (s.enrollments || []).filter(e => e.status === 'active');
+        const monthlyFee = StudentsModule.calculateMonthlyFee(s);
+        const pendingBal = StudentsModule.calculateOutstandingBalance(s);
+        const payStatus = StudentsModule.getPaymentStatus(s);
 
-      // Program tags preview
-      const progBadges = activeEnrollments.length > 0
-        ? activeEnrollments.map(e => `
-            <span class="badge badge-programme" style="margin: 2px 2px 2px 0;">
-              ${Utils.escapeHtml(e.programmes?.name || 'Prog')} (${Utils.escapeHtml(e.class_or_grade)})
-            </span>
-          `).join('')
-        : '<span class="text-muted" style="font-size:0.8rem;">No active programmes</span>';
+        const progBadges = activeEnrollments.length > 0
+          ? activeEnrollments.map(e => `
+              <span class="badge badge-programme" style="margin: 2px;">
+                ${Utils.escapeHtml(e.programmes?.name || 'Tuition')} (${Utils.escapeHtml(e.class_or_grade)})
+              </span>
+            `).join('')
+          : '<span class="text-muted" style="font-size:0.78rem;">No active programmes</span>';
 
-      return `
-        <tr>
-          <td>
-            <strong>${Utils.escapeHtml(s.student_id || '—')}</strong>
-          </td>
-          <td>
-            <div style="font-weight: 600; color: var(--text-main); font-size: 0.92rem;">
-              <a href="#student-profile" onclick="StudentsModule.viewProfile('${s.id}')" style="color: var(--accent); text-decoration: underline;">
-                ${Utils.escapeHtml(s.name)}
-              </a>
+        return `
+          <tr>
+            <td><strong>${Utils.escapeHtml(s.student_id || '—')}</strong></td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.92rem;">
+                <a href="#student-profile" onclick="StudentsModule.viewProfile('${s.id}')" style="color: var(--accent-blue); text-decoration: underline;">
+                  ${Utils.escapeHtml(s.name)}
+                </a>
+              </div>
+              ${s.parent_name ? `<div style="font-size: 0.78rem; color: var(--text-muted);">${Utils.escapeHtml(s.parent_name)} (Parent)</div>` : ''}
+            </td>
+            <td>
+              ${s.whatsapp_number ? `
+                <a href="https://wa.me/${Utils.cleanPhoneNumber(s.whatsapp_number)}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.5rem; gap: 0.3rem;">
+                  <i data-lucide="message-circle" style="width: 13px; height: 13px; color: #16a34a;"></i>
+                  ${Utils.escapeHtml(s.whatsapp_number)}
+                </a>
+              ` : '<span class="text-muted">—</span>'}
+            </td>
+            <td><div style="display: flex; flex-wrap: wrap; max-width: 260px;">${progBadges}</div></td>
+            <td><strong>${Utils.formatCurrency(monthlyFee)}</strong> / mo</td>
+            <td>
+              <strong style="color: ${pendingBal > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'}; font-size: 0.95rem;">
+                ${Utils.formatCurrency(pendingBal)}
+              </strong>
+            </td>
+            <td>
+              <span class="badge ${payStatus.class}">
+                <span class="badge-dot"></span>
+                ${payStatus.label}
+              </span>
+            </td>
+            <td class="actions-cell">
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.viewProfile('${s.id}')" title="View Profile">
+                <i data-lucide="user" style="width: 14px; height: 14px;"></i> View
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
+                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 2. Mobile Cards (Compact, Readable, No Horizontal Overflow)
+    if (mobileContainer) {
+      mobileContainer.innerHTML = list.map(s => {
+        const activeEnrollments = (s.enrollments || []).filter(e => e.status === 'active');
+        const monthlyFee = StudentsModule.calculateMonthlyFee(s);
+        const pendingBal = StudentsModule.calculateOutstandingBalance(s);
+        const payStatus = StudentsModule.getPaymentStatus(s);
+
+        const progBadges = activeEnrollments.length > 0
+          ? activeEnrollments.map(e => `
+              <span class="badge badge-programme">
+                ${Utils.escapeHtml(e.programmes?.name || 'Tuition')} (${Utils.escapeHtml(e.class_or_grade)})
+              </span>
+            `).join('')
+          : '<span class="text-muted" style="font-size:0.75rem;">No active programmes</span>';
+
+        return `
+          <div class="student-mobile-card">
+            <div class="student-card-top">
+              <div>
+                <div class="student-card-name">${Utils.escapeHtml(s.name)}</div>
+                <div class="student-card-parent">${s.parent_name ? `${Utils.escapeHtml(s.parent_name)} (Parent)` : ''} • ID: ${Utils.escapeHtml(s.student_id)}</div>
+              </div>
+              <span class="badge ${payStatus.class}">
+                <span class="badge-dot"></span>
+                ${payStatus.label}
+              </span>
             </div>
-            ${s.parent_name ? `<div style="font-size: 0.78rem; color: var(--text-muted);">${Utils.escapeHtml(s.parent_name)} (Parent)</div>` : ''}
-          </td>
-          <td>
-            ${s.whatsapp_number ? `
-              <a href="https://wa.me/${Utils.cleanPhoneNumber(s.whatsapp_number)}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.5rem; gap: 0.3rem;">
-                <i data-lucide="message-circle" style="width: 13px; height: 13px; color: #16a34a;"></i>
-                ${Utils.escapeHtml(s.whatsapp_number)}
-              </a>
-            ` : '—'}
-          </td>
-          <td>
-            <div style="display: flex; flex-wrap: wrap; max-width: 240px;">
-              ${progBadges}
+
+            <div class="student-card-progs">${progBadges}</div>
+
+            <div class="student-card-financials">
+              <div>Fee: <strong>${Utils.formatCurrency(monthlyFee)}</strong>/mo</div>
+              <div>Pending: <strong style="color: ${pendingBal > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(pendingBal)}</strong></div>
             </div>
-          </td>
-          <td>
-            <strong style="font-size: 0.95rem;">${Utils.formatCurrency(monthlyFee)}</strong> / mo
-          </td>
-          <td>
-            <span style="font-weight: 700; color: ${pendingBal > 0 ? 'var(--danger)' : 'var(--success)'};">
-              ${Utils.formatCurrency(pendingBal)}
-            </span>
-          </td>
-          <td>
-            <span class="badge ${payStatus.class}">
-              <span class="badge-dot"></span>
-              ${payStatus.label}
-            </span>
-          </td>
-          <td class="actions-cell">
-            <button class="btn btn-secondary btn-sm" onclick="StudentsModule.viewProfile('${s.id}')" title="View Profile">
-              <i data-lucide="user" style="width: 14px; height: 14px;"></i> View
-            </button>
-            <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')" title="Record Payment">
-              <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+
+            <div class="student-card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="StudentsModule.viewProfile('${s.id}')">
+                <i data-lucide="user" style="width: 14px; height: 14px;"></i> Profile
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="PaymentsModule.openRecordPaymentModal('${s.id}')">
+                <i data-lucide="credit-card" style="width: 14px; height: 14px;"></i> Collect Fee
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     Utils.renderIcons();
+  },
+
+  // Toggle mobile filter panel
+  toggleMobileFilters: () => {
+    const filterBar = document.getElementById('student-filter-bar');
+    if (filterBar) {
+      filterBar.classList.toggle('active');
+    }
   },
 
   // Open the Single-Page Add Student Registration Form
@@ -215,6 +265,9 @@ const StudentsModule = {
     document.getElementById('student-address-input').value = '';
     document.getElementById('student-notes-input').value = '';
     document.getElementById('student-status-select').value = 'active';
+
+    // Set joining date default to today (editable)
+    document.getElementById('student-joining-date-input').value = new Date().toISOString().slice(0, 10);
 
     // Auto-generate next Student ID
     const nextId = Utils.getNextStudentId(AppState.students);
@@ -235,7 +288,7 @@ const StudentsModule = {
     Utils.openModal('modal-add-student');
   },
 
-  // Add dynamic programme row in registration form
+  // Add dynamic programme card in registration / edit form
   addProgrammeRow: (initialData = null) => {
     StudentsModule.activeProgrammeRowCount++;
     const rowId = `prog-row-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -247,24 +300,39 @@ const StudentsModule = {
       </option>
     `).join('');
 
-    const row = document.createElement('div');
-    row.className = 'programme-entry-row';
-    row.id = rowId;
-    row.style.cssText = `
-      background: var(--surface-alt);
-      border: 1px solid var(--border-color);
+    const classOptions = (AppState.masterClasses || []).map(c => `
+      <option value="${c}" ${initialData && initialData.class_or_grade === c ? 'selected' : ''}>
+        ${Utils.escapeHtml(c)}
+      </option>
+    `).join('');
+
+    const boardOptions = (AppState.masterBoards || []).map(b => `
+      <option value="${b}" ${initialData && initialData.board === b ? 'selected' : ''}>
+        ${Utils.escapeHtml(b)}
+      </option>
+    `).join('');
+
+    const card = document.createElement('div');
+    card.className = 'programme-entry-card';
+    card.id = rowId;
+    if (initialData && initialData.id) {
+      card.dataset.enrollmentId = initialData.id;
+    }
+    card.style.cssText = `
+      background: var(--surface-card);
+      border: 1px solid var(--border-light);
       border-radius: var(--radius-md);
       padding: 1rem;
       margin-bottom: 0.85rem;
-      position: relative;
+      box-shadow: var(--shadow-subtle);
     `;
 
-    row.innerHTML = `
+    card.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
-        <span style="font-size: 0.82rem; font-weight: 700; color: var(--accent);">
-          Programme #${container.children.length + 1}
+        <span style="font-size: 0.82rem; font-weight: 700; color: var(--accent-blue);">
+          Programme Enrolment #${container.children.length + 1}
         </span>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="StudentsModule.removeProgrammeRow('${rowId}')" title="Remove Programme" style="color: var(--danger); padding: 0.2rem 0.5rem;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="StudentsModule.removeProgrammeRow('${rowId}')" title="Remove Programme" style="color: var(--status-unpaid); padding: 0.2rem 0.5rem; min-height: 28px;">
           <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Remove
         </button>
       </div>
@@ -282,59 +350,37 @@ const StudentsModule = {
           <label class="form-label">Class / Grade <span class="required">*</span></label>
           <select class="form-control prog-class-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}')" required>
             <option value="">Select Class</option>
-            <option value="LKG">LKG</option>
-            <option value="UKG">UKG</option>
-            <option value="1st">1st Standard</option>
-            <option value="2nd">2nd Standard</option>
-            <option value="3rd">3rd Standard</option>
-            <option value="4th">4th Standard</option>
-            <option value="5th">5th Standard</option>
-            <option value="6th">6th Standard</option>
-            <option value="7th">7th Standard</option>
-            <option value="8th">8th Standard</option>
-            <option value="9th">9th Standard</option>
-            <option value="10th">10th Standard</option>
-            <option value="11th">11th Standard</option>
-            <option value="12th">12th Standard</option>
-            <option value="Basic">Basic (Hindi)</option>
-            <option value="school">School (Hindi)</option>
+            ${classOptions}
           </select>
         </div>
 
         <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Board / Mode</label>
+          <label class="form-label">Board / Category</label>
           <select class="form-control prog-board-select" onchange="StudentsModule.onProgrammeFieldChange('${rowId}')">
-            <option value="Matric">Matric</option>
-            <option value="CBSE">CBSE</option>
-            <option value="Virtual">Virtual / Classroom</option>
-            <option value="Online">Online</option>
+            ${boardOptions}
           </select>
         </div>
 
         <div class="form-group" style="margin-bottom: 0.5rem;">
           <label class="form-label">Monthly Fee (₹) <span class="required">*</span></label>
-          <div style="display: flex; gap: 0.35rem;">
-            <input type="number" class="form-control prog-fee-input" placeholder="0" min="0" oninput="StudentsModule.onFeeManualOverride('${rowId}')" required>
-          </div>
-          <div class="form-hint fee-auto-hint" style="font-size: 0.72rem; color: var(--accent);">Auto-fetched from fee structure</div>
+          <input type="number" class="form-control prog-fee-input" placeholder="0" min="0" oninput="StudentsModule.onFeeManualOverride('${rowId}')" required>
+          <div class="form-hint fee-auto-hint" style="font-size: 0.72rem; color: var(--accent-blue);">Auto-fetched from fee structure</div>
         </div>
       </div>
 
-      <div class="form-row override-reason-wrap" style="display: none; margin-top: 0.35rem;">
-        <div class="form-group" style="grid-column: 1 / -1; margin-bottom: 0;">
-          <input type="text" class="form-control prog-override-reason" placeholder="Reason for fee override (optional)">
-        </div>
+      <div class="override-reason-wrap" style="display: none; margin-top: 0.35rem;">
+        <input type="text" class="form-control prog-override-reason" placeholder="Reason for fee override (optional)" style="font-size: 0.8rem;">
       </div>
     `;
 
-    container.appendChild(row);
+    container.appendChild(card);
     Utils.renderIcons();
 
     if (initialData) {
-      const select = row.querySelector('.prog-select');
-      const classSelect = row.querySelector('.prog-class-select');
-      const boardSelect = row.querySelector('.prog-board-select');
-      const feeInput = row.querySelector('.prog-fee-input');
+      const select = card.querySelector('.prog-select');
+      const classSelect = card.querySelector('.prog-class-select');
+      const boardSelect = card.querySelector('.prog-board-select');
+      const feeInput = card.querySelector('.prog-fee-input');
 
       if (select) select.value = initialData.programme_id;
       if (classSelect) classSelect.value = initialData.class_or_grade;
@@ -345,35 +391,34 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
   },
 
-  // Remove a programme row
+  // Remove programme row
   removeProgrammeRow: (rowId) => {
     const container = document.getElementById('programme-rows-container');
     if (container.children.length <= 1) {
-      Utils.showToast("Note", "A student must have at least one programme enrolment.", "warning");
+      Utils.showToast("Notice", "A student must have at least one programme enrolment.", "warning");
       return;
     }
-    const row = document.getElementById(rowId);
-    if (row) row.remove();
+    const card = document.getElementById(rowId);
+    if (card) card.remove();
 
-    // Renumber remaining rows
     Array.from(container.children).forEach((child, idx) => {
       const titleSpan = child.querySelector('span');
-      if (titleSpan) titleSpan.textContent = `Programme #${idx + 1}`;
+      if (titleSpan) titleSpan.textContent = `Programme Enrolment #${idx + 1}`;
     });
 
     StudentsModule.updateCombinedFeePreview();
   },
 
-  // Triggered when Programme, Class, or Board changes in a row
+  // EXACT MATCHING fee lookup triggered on dropdown changes
   onProgrammeFieldChange: (rowId) => {
-    const row = document.getElementById(rowId);
-    if (!row) return;
+    const card = document.getElementById(rowId);
+    if (!card) return;
 
-    const progId = row.querySelector('.prog-select').value;
-    const grade = row.querySelector('.prog-class-select').value;
-    const board = row.querySelector('.prog-board-select').value;
-    const feeInput = row.querySelector('.prog-fee-input');
-    const hint = row.querySelector('.fee-auto-hint');
+    const progId = card.querySelector('.prog-select').value;
+    const grade = card.querySelector('.prog-class-select').value;
+    const board = card.querySelector('.prog-board-select').value;
+    const feeInput = card.querySelector('.prog-fee-input');
+    const hint = card.querySelector('.fee-auto-hint');
 
     if (!progId || !grade) {
       feeInput.value = '';
@@ -383,27 +428,28 @@ const StudentsModule = {
       return;
     }
 
+    // Exact matching
     const fetchedFee = FeesModule.lookupFee(progId, grade, board);
     if (fetchedFee !== null && fetchedFee !== undefined) {
       feeInput.value = fetchedFee;
-      hint.textContent = `✓ Standard fee: ₹${fetchedFee}`;
-      hint.style.color = 'var(--success)';
-      row.dataset.standardFee = fetchedFee;
+      hint.textContent = `✓ Exact match fee: ₹${fetchedFee}/mo`;
+      hint.style.color = 'var(--status-paid)';
+      card.dataset.standardFee = fetchedFee;
     } else {
-      hint.textContent = '⚠️ No matching fee structure found. Please set manually.';
-      hint.style.color = 'var(--warning)';
+      hint.textContent = `⚠️ No fee rule found for ${grade} (${board}). Please set manually.`;
+      hint.style.color = 'var(--status-pending)';
     }
 
     StudentsModule.updateCombinedFeePreview();
   },
 
-  // When admin overrides the auto-fetched fee
+  // Manual fee override
   onFeeManualOverride: (rowId) => {
-    const row = document.getElementById(rowId);
-    if (!row) return;
-    const standardFee = parseFloat(row.dataset.standardFee) || 0;
-    const currentFee = parseFloat(row.querySelector('.prog-fee-input').value) || 0;
-    const overrideWrap = row.querySelector('.override-reason-wrap');
+    const card = document.getElementById(rowId);
+    if (!card) return;
+    const standardFee = parseFloat(card.dataset.standardFee) || 0;
+    const currentFee = parseFloat(card.querySelector('.prog-fee-input').value) || 0;
+    const overrideWrap = card.querySelector('.override-reason-wrap');
 
     if (standardFee > 0 && currentFee !== standardFee) {
       if (overrideWrap) overrideWrap.style.display = 'block';
@@ -411,7 +457,7 @@ const StudentsModule = {
     StudentsModule.updateCombinedFeePreview();
   },
 
-  // Recalculate combined monthly fee in registration form
+  // Running combined monthly fee calculation in registration / edit form
   updateCombinedFeePreview: () => {
     const container = document.getElementById('programme-rows-container');
     if (!container) return;
@@ -419,10 +465,10 @@ const StudentsModule = {
     let total = 0;
     const breakdown = [];
 
-    Array.from(container.children).forEach(row => {
-      const progSelect = row.querySelector('.prog-select');
-      const classSelect = row.querySelector('.prog-class-select');
-      const feeInput = row.querySelector('.prog-fee-input');
+    Array.from(container.children).forEach(card => {
+      const progSelect = card.querySelector('.prog-select');
+      const classSelect = card.querySelector('.prog-class-select');
+      const feeInput = card.querySelector('.prog-fee-input');
 
       const progName = progSelect?.options[progSelect.selectedIndex]?.text || '';
       const grade = classSelect?.value || '';
@@ -441,7 +487,7 @@ const StudentsModule = {
     if (breakdownEl) breakdownEl.textContent = breakdown.length > 0 ? breakdown.join(' + ') : 'None selected';
   },
 
-  // Save Student and Enrolments (PART 3: STATUS UNPAID, NO IMMEDIATE PAYMENT)
+  // SAVE STUDENT & ENROLMENTS (Supports both New Registration & Full Editing)
   saveStudent: async (e) => {
     e.preventDefault();
 
@@ -453,30 +499,32 @@ const StudentsModule = {
     const address = document.getElementById('student-address-input').value.trim();
     const notes = document.getElementById('student-notes-input').value.trim();
     const status = document.getElementById('student-status-select').value;
+    const joining_date = document.getElementById('student-joining-date-input').value || new Date().toISOString().slice(0, 10);
 
     if (!name) {
-      Utils.showToast("Validation Error", "Student Name is required", "warning");
+      Utils.showToast("Required", "Student Name is required", "warning");
       return;
     }
     if (!whatsapp_number) {
-      Utils.showToast("Validation Error", "Parent WhatsApp Number is required", "warning");
+      Utils.showToast("Required", "Parent WhatsApp Number is required", "warning");
       return;
     }
 
-    // Extract dynamic programme rows
+    // Extract dynamic programme enrolments
     const container = document.getElementById('programme-rows-container');
     const selectedProgrammes = [];
     const seenProgIds = new Set();
 
-    for (const row of Array.from(container.children)) {
-      const progId = row.querySelector('.prog-select').value;
-      const grade = row.querySelector('.prog-class-select').value;
-      const board = row.querySelector('.prog-board-select').value;
-      const fee = parseFloat(row.querySelector('.prog-fee-input').value) || 0;
-      const overrideReason = row.querySelector('.prog-override-reason')?.value.trim() || '';
+    for (const card of Array.from(container.children)) {
+      const enrollmentId = card.dataset.enrollmentId || null;
+      const progId = card.querySelector('.prog-select').value;
+      const grade = card.querySelector('.prog-class-select').value;
+      const board = card.querySelector('.prog-board-select').value;
+      const fee = parseFloat(card.querySelector('.prog-fee-input').value) || 0;
+      const overrideReason = card.querySelector('.prog-override-reason')?.value.trim() || '';
 
       if (!progId || !grade) {
-        Utils.showToast("Validation Error", "Please complete all programme details", "warning");
+        Utils.showToast("Required", "Please complete all programme details", "warning");
         return;
       }
 
@@ -487,112 +535,136 @@ const StudentsModule = {
       seenProgIds.add(progId);
 
       selectedProgrammes.push({
+        enrollment_id: enrollmentId,
         programme_id: progId,
         class_or_grade: grade,
         board,
         agreed_fee: fee,
-        notes: overrideReason ? `Fee override reason: ${overrideReason}` : ''
+        notes: overrideReason ? `Fee override: ${overrideReason}` : ''
       });
     }
 
     if (selectedProgrammes.length === 0) {
-      Utils.showToast("Validation Error", "Please select at least one programme enrolment", "warning");
+      Utils.showToast("Required", "Please select at least one programme enrolment", "warning");
       return;
     }
 
     try {
-      let savedStudentId = studentId;
-
       if (!studentId) {
-        // Create new student
+        // ==========================================
+        // 1. NEW REGISTRATION WORKFLOW
+        // ==========================================
         const studentCode = document.getElementById('student-code-preview').textContent || Utils.getNextStudentId(AppState.students);
-        const studentPayload = {
-          student_id: studentCode,
-          name,
-          parent_name,
-          whatsapp_number,
-          alt_phone,
-          address,
-          notes,
-          status,
-          admission_date: new Date().toISOString().slice(0, 10),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
+        
+        // Try atomic RPC first
+        let rpcSucceeded = false;
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabaseClient.rpc('register_student_transaction', {
+            p_student_code: studentCode,
+            p_name: name,
+            p_parent_name: parent_name,
+            p_whatsapp_number: whatsapp_number,
+            p_alt_phone: alt_phone,
+            p_address: address,
+            p_notes: notes,
+            p_admission_date: joining_date,
+            p_status: status,
+            p_programmes: selectedProgrammes
+          });
+          if (!rpcErr && rpcRes && rpcRes.success) {
+            rpcSucceeded = true;
+          }
+        } catch (rpcEx) {
+          rpcSucceeded = false;
+        }
 
-        const { data: newStudent, error: sErr } = await supabaseClient
-          .from('students')
-          .insert([studentPayload])
-          .select();
+        // Direct transactional fallback if RPC not yet created in Supabase
+        if (!rpcSucceeded) {
+          const studentPayload = {
+            student_id: studentCode,
+            name,
+            parent_name,
+            whatsapp_number,
+            alt_phone,
+            address,
+            notes,
+            status,
+            admission_date: joining_date,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
 
-        if (sErr) throw sErr;
-        savedStudentId = newStudent[0].id;
-        await AuthModule.logAudit('register_student', 'students', savedStudentId, studentPayload);
+          const { data: newStudent, error: sErr } = await supabaseClient
+            .from('students')
+            .insert([studentPayload])
+            .select();
 
-        // Insert programme enrolments
-        const enrollmentRows = selectedProgrammes.map(p => ({
-          student_id: savedStudentId,
-          programme_id: p.programme_id,
-          class_or_grade: p.class_or_grade,
-          board: p.board,
-          agreed_fee: p.agreed_fee,
-          start_date: new Date().toISOString().slice(0, 10),
-          status: 'active',
-          is_verified: true,
-          notes: p.notes,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
+          if (sErr) throw sErr;
+          const newStudentId = newStudent[0].id;
 
-        const { error: eErr } = await supabaseClient
-          .from('enrollments')
-          .insert(enrollmentRows);
-
-        if (eErr) throw eErr;
-
-        // Auto-generate initial invoice for current month (Status: UNPAID)
-        const now = new Date();
-        const curMonth = now.getMonth() + 1;
-        const curYear = now.getFullYear();
-        const totalFee = selectedProgrammes.reduce((sum, p) => sum + p.agreed_fee, 0);
-
-        const invPayload = {
-          invoice_number: Utils.getNextInvoiceNumber(studentCode, curMonth, curYear),
-          student_id: savedStudentId,
-          billing_month: curMonth,
-          billing_year: curYear,
-          invoice_date: now.toISOString().slice(0, 10),
-          due_date: `${curYear}-${String(curMonth).padStart(2, '0')}-${String(AppState.institution?.default_due_day || 10).padStart(2, '0')}`,
-          total_amount: totalFee,
-          paid_amount: 0,
-          balance_amount: totalFee,
-          status: 'unpaid',
-          notes: 'Initial monthly fee on student registration'
-        };
-
-        const { data: createdInv } = await supabaseClient
-          .from('invoices')
-          .insert([invPayload])
-          .select();
-
-        if (createdInv && createdInv[0]) {
-          // Insert invoice items
-          const items = selectedProgrammes.map(p => ({
-            invoice_id: createdInv[0].id,
+          // Insert enrolments
+          const enrollmentRows = selectedProgrammes.map(p => ({
+            student_id: newStudentId,
             programme_id: p.programme_id,
             class_or_grade: p.class_or_grade,
-            description: `${AppState.programmes.find(prog => prog.id === p.programme_id)?.name || 'Tuition'} (${p.class_or_grade})`,
-            amount: p.agreed_fee
+            board: p.board,
+            agreed_fee: p.agreed_fee,
+            start_date: joining_date,
+            status: 'active',
+            is_verified: true,
+            notes: p.notes,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }));
-          await supabaseClient.from('invoice_items').insert(items);
+
+          const { error: eErr } = await supabaseClient.from('enrollments').insert(enrollmentRows);
+          if (eErr) throw eErr;
+
+          // Generate initial monthly invoice using joining date period (Status: UNPAID)
+          const joinDateObj = new Date(joining_date);
+          const billMonth = joinDateObj.getMonth() + 1;
+          const billYear = joinDateObj.getFullYear();
+          const totalFee = selectedProgrammes.reduce((sum, p) => sum + p.agreed_fee, 0);
+          const dueDay = AppState.institution?.default_due_day || 10;
+          const dueDate = `${billYear}-${String(billMonth).padStart(2, '0')}-${String(Math.min(dueDay, 28)).padStart(2, '0')}`;
+
+          const invPayload = {
+            invoice_number: Utils.getNextInvoiceNumber(studentCode, billMonth, billYear),
+            student_id: newStudentId,
+            billing_month: billMonth,
+            billing_year: billYear,
+            invoice_date: joining_date,
+            due_date: dueDate,
+            total_amount: totalFee,
+            paid_amount: 0,
+            balance_amount: totalFee,
+            status: 'unpaid',
+            notes: 'Initial monthly tuition invoice on registration'
+          };
+
+          const { data: createdInv } = await supabaseClient.from('invoices').insert([invPayload]).select();
+          if (createdInv && createdInv[0]) {
+            const items = selectedProgrammes.map(p => ({
+              invoice_id: createdInv[0].id,
+              programme_id: p.programme_id,
+              class_or_grade: p.class_or_grade,
+              description: `Tuition fee (${p.class_or_grade})`,
+              amount: p.agreed_fee
+            }));
+            await supabaseClient.from('invoice_items').insert(items);
+          }
         }
 
         Utils.closeModal('modal-add-student');
-        Utils.showToast("Registered Successfully", `Student registered with UNPAID status. Monthly fee: ₹${totalFee}`, "success", 6000);
+        const combinedMonthlyFee = selectedProgrammes.reduce((sum, p) => sum + p.agreed_fee, 0);
+        Utils.showToast("Registered Successfully", `Student registered with UNPAID fee status. Monthly fee: ₹${combinedMonthlyFee}`, "success", 6000);
 
       } else {
-        // Update existing student details
-        const updatePayload = {
+        // ==========================================
+        // 2. EDIT STUDENT WORKFLOW (Saves ALL fields and enrolments!)
+        // ==========================================
+        // A. Update student details
+        const updateStudentPayload = {
           name,
           parent_name,
           whatsapp_number,
@@ -605,30 +677,67 @@ const StudentsModule = {
 
         const { error: uErr } = await supabaseClient
           .from('students')
-          .update(updatePayload)
+          .update(updateStudentPayload)
           .eq('id', studentId);
 
         if (uErr) throw uErr;
-        await AuthModule.logAudit('update_student', 'students', studentId, updatePayload);
 
+        // B. Update / Insert Programme Enrolments
+        for (const p of selectedProgrammes) {
+          if (p.enrollment_id) {
+            // Update existing enrolment (applies to future billing)
+            await supabaseClient
+              .from('enrollments')
+              .update({
+                programme_id: p.programme_id,
+                class_or_grade: p.class_or_grade,
+                board: p.board,
+                agreed_fee: p.agreed_fee,
+                notes: p.notes,
+                status: 'active',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', p.enrollment_id);
+          } else {
+            // New programme added during edit
+            await supabaseClient
+              .from('enrollments')
+              .insert([{
+                student_id: studentId,
+                programme_id: p.programme_id,
+                class_or_grade: p.class_or_grade,
+                board: p.board,
+                agreed_fee: p.agreed_fee,
+                start_date: new Date().toISOString().slice(0, 10),
+                status: 'active',
+                is_verified: true,
+                notes: p.notes,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }]);
+          }
+        }
+
+        await AuthModule.logAudit('edit_student_and_programmes', 'students', studentId, { name, selectedProgrammes });
         Utils.closeModal('modal-add-student');
-        Utils.showToast("Updated", "Student profile updated successfully", "success");
+        Utils.showToast("Updated", "Student profile and programme enrolments saved successfully", "success");
       }
 
       await StudentsModule.loadStudents();
+      await MonthlyFeesModule.loadInvoices();
       StudentsModule.renderStudentsTable();
 
-      if (savedStudentId) {
-        StudentsModule.viewProfile(savedStudentId);
+      if (studentId) {
+        StudentsModule.viewProfile(studentId);
       }
 
     } catch (err) {
       console.error("Save student error:", err);
-      Utils.showToast("Error", err.message || "Failed to register student", "error");
+      Utils.showToast("Error", err.message || "Failed to save student record", "error");
     }
   },
 
-  // Open Full Student Profile View
+  // View Comprehensive Student Profile
   viewProfile: async (studentId) => {
     StudentsModule.currentProfileStudentId = studentId;
     window.location.hash = "#student-profile";
@@ -636,8 +745,8 @@ const StudentsModule = {
     const student = AppState.students.find(s => s.id === studentId);
     if (!student) return;
 
-    // Fetch full student details with payments, invoices & receipts
-    const { data: fullStudent, error } = await supabaseClient
+    // Fetch full data with invoices and payments
+    const { data: fullStudent } = await supabaseClient
       .from('students')
       .select(`
         *,
@@ -659,7 +768,7 @@ const StudentsModule = {
 
     const s = fullStudent || student;
 
-    // Populate Personal Details
+    // Personal Details
     document.getElementById('profile-student-name').textContent = s.name;
     document.getElementById('profile-student-id').textContent = s.student_id;
     document.getElementById('profile-parent-name').textContent = s.parent_name || 'Not provided';
@@ -670,10 +779,10 @@ const StudentsModule = {
 
     // Status Badge
     const statusBadge = document.getElementById('profile-status-badge');
-    statusBadge.className = `badge ${s.status === 'active' ? 'badge-active' : 'badge-inactive'}`;
+    statusBadge.className = `badge ${s.status === 'active' ? 'badge-paid' : 'badge-unpaid'}`;
     statusBadge.innerHTML = `<span class="badge-dot"></span> ${s.status === 'active' ? 'Active' : 'Inactive'}`;
 
-    // WhatsApp Action Link
+    // WhatsApp Direct Action
     const waLink = document.getElementById('profile-whatsapp-action');
     if (waLink) {
       waLink.href = s.whatsapp_number ? `https://wa.me/${Utils.cleanPhoneNumber(s.whatsapp_number)}` : '#';
@@ -691,16 +800,16 @@ const StudentsModule = {
     document.getElementById('profile-metric-paid').textContent = Utils.formatCurrency(totalPaid);
     document.getElementById('profile-metric-billed').textContent = Utils.formatCurrency(totalBilled);
 
-    // Render Enrolments
+    // Enrolled Programmes
     const enrollmentsContainer = document.getElementById('profile-enrollments-list');
     if (enrollmentsContainer) {
       if (!s.enrollments || s.enrollments.length === 0) {
         enrollmentsContainer.innerHTML = `<div class="text-muted" style="padding: 1rem;">No programme enrolments recorded.</div>`;
       } else {
         enrollmentsContainer.innerHTML = s.enrollments.map(e => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; border-bottom: 1px solid var(--border-light); flex-wrap: wrap; gap: 0.5rem;">
             <div>
-              <strong style="font-size: 0.95rem; color: var(--text-main);">${Utils.escapeHtml(e.programmes?.name || 'Programme')}</strong>
+              <strong style="font-size: 0.95rem; color: var(--text-main);">${Utils.escapeHtml(e.programmes?.name || 'Tuition')}</strong>
               <div style="font-size: 0.8rem; color: var(--text-muted);">
                 Class: <strong>${Utils.escapeHtml(e.class_or_grade)}</strong> 
                 ${e.board ? `| Board: ${Utils.escapeHtml(e.board)}` : ''} 
@@ -708,10 +817,10 @@ const StudentsModule = {
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <strong style="color: var(--accent); font-size: 1rem;">${Utils.formatCurrency(e.agreed_fee)}/mo</strong>
-              <span class="badge ${e.status === 'active' ? 'badge-active' : 'badge-inactive'}">${e.status}</span>
+              <strong style="color: var(--accent-blue); font-size: 1rem;">${Utils.formatCurrency(e.agreed_fee)}/mo</strong>
+              <span class="badge ${e.status === 'active' ? 'badge-paid' : 'badge-unpaid'}">${e.status}</span>
               ${e.status === 'active' ? `
-                <button class="btn btn-secondary btn-sm" onclick="StudentsModule.discontinueEnrollment('${e.id}')" style="color: var(--danger);">
+                <button class="btn btn-secondary btn-sm" onclick="StudentsModule.discontinueEnrollment('${e.id}')" style="color: var(--status-unpaid);">
                   Discontinue
                 </button>
               ` : ''}
@@ -721,7 +830,7 @@ const StudentsModule = {
       }
     }
 
-    // Render Invoices Table
+    // Invoices Ledger
     const invoicesBody = document.getElementById('profile-invoices-body');
     if (invoicesBody) {
       const invs = s.invoices || [];
@@ -734,7 +843,7 @@ const StudentsModule = {
             <td>${Utils.formatMonthYear(inv.billing_month, inv.billing_year)}</td>
             <td>${Utils.formatCurrency(inv.total_amount)}</td>
             <td>${Utils.formatCurrency(inv.paid_amount)}</td>
-            <td><strong style="color: ${inv.balance_amount > 0 ? 'var(--danger)' : 'var(--success)'};">${Utils.formatCurrency(inv.balance_amount)}</strong></td>
+            <td><strong style="color: ${inv.balance_amount > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">${Utils.formatCurrency(inv.balance_amount)}</strong></td>
             <td>
               <span class="badge ${inv.status === 'paid' ? 'badge-paid' : (inv.status === 'partially_paid' ? 'badge-partial' : 'badge-unpaid')}">
                 ${inv.status}
@@ -745,7 +854,7 @@ const StudentsModule = {
       }
     }
 
-    // Render Payments & Receipts History
+    // Payments & Receipts History
     const paymentsBody = document.getElementById('profile-payments-body');
     if (paymentsBody) {
       const pmts = s.payments || [];
@@ -758,7 +867,7 @@ const StudentsModule = {
             <tr>
               <td><strong>${Utils.escapeHtml(p.payment_number)}</strong></td>
               <td>${Utils.formatDate(p.payment_date)}</td>
-              <td><strong style="color: var(--success);">${Utils.formatCurrency(p.amount)}</strong></td>
+              <td><strong style="color: var(--status-paid);">${Utils.formatCurrency(p.amount)}</strong></td>
               <td><span class="badge badge-neutral">${Utils.escapeHtml(p.payment_method)}</span></td>
               <td>${r ? `<code>${Utils.escapeHtml(r.receipt_number)}</code>` : '—'}</td>
               <td class="actions-cell">
@@ -791,19 +900,20 @@ const StudentsModule = {
     document.getElementById('student-address-input').value = student.address || '';
     document.getElementById('student-notes-input').value = student.notes || '';
     document.getElementById('student-status-select').value = student.status;
+    document.getElementById('student-joining-date-input').value = student.admission_date || '';
 
-    // Populate existing programmes
+    // Populate all existing programmes
     const container = document.getElementById('programme-rows-container');
     container.innerHTML = '';
     (student.enrollments || []).forEach(e => {
       StudentsModule.addProgrammeRow(e);
     });
 
-    document.getElementById('student-modal-title').textContent = 'Edit Student Profile';
+    document.getElementById('student-modal-title').textContent = 'Edit Student Profile & Enrolments';
     Utils.openModal('modal-add-student');
   },
 
-  // Discontinue an individual programme enrolment
+  // Discontinue an individual enrolment
   discontinueEnrollment: async (enrollmentId) => {
     if (confirm("Are you sure you want to discontinue this programme enrolment? Future invoices will not include this fee.")) {
       try {

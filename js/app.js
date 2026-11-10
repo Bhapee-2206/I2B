@@ -1,6 +1,6 @@
 /**
  * EDUTRACK MASTER APPLICATION CONTROLLER & ROUTER
- * Handles SPA Navigation, Drawer Toggles, Life Cycle & Route Dispatching
+ * Handles Desktop Sidebar, Mobile Bottom Navigation, More Bottom Sheet & Route Dispatching
  */
 
 const App = {
@@ -10,8 +10,9 @@ const App = {
     try {
       console.log("Initializing EduTrack Application...");
 
-      // 1. Initialize Auth & Session
-      await AuthModule.init();
+      // 1. Strict Authentication Check
+      const isAuthenticated = await AuthModule.init();
+      if (!isAuthenticated) return;
 
       // 2. Load Core Application Settings from Database
       await SettingsModule.init();
@@ -26,7 +27,7 @@ const App = {
       await PaymentsModule.loadPayments();
       await ReceiptsModule.loadReceipts();
 
-      // 5. Setup Router & Mobile Drawer listeners
+      // 5. Setup DOM Listeners (Desktop & Mobile Bottom Nav)
       App.setupEventListeners();
 
       // 6. Navigate to initial route
@@ -39,60 +40,96 @@ const App = {
       console.log("EduTrack initialized successfully.");
     } catch (err) {
       console.error("Application initialization error:", err);
-      Utils.showToast("System Notice", "Loaded in offline / cached configuration mode.", "info");
+      Utils.showToast("Notice", "Error initializing data. Please verify your connection.", "warning");
     }
   },
 
-  // Setup DOM listeners
+  // Setup DOM Event Listeners
   setupEventListeners: () => {
-    // Hash change routing
+    // Hash change listener
     window.addEventListener('hashchange', () => {
       const route = window.location.hash.replace('#', '') || 'dashboard';
       App.navigateTo(route);
     });
 
-    // Mobile Hamburger button
-    const mobileBtn = document.getElementById('mobile-menu-toggle');
-    const sidebar = document.getElementById('app-sidebar');
-    const backdrop = document.getElementById('sidebar-backdrop');
+    // Mobile "More" button toggle
+    const moreBtn = document.getElementById('mobile-nav-more-btn');
+    const bottomSheet = document.getElementById('mobile-more-sheet');
+    const sheetBackdrop = document.getElementById('bottom-sheet-backdrop');
 
-    if (mobileBtn && sidebar && backdrop) {
-      mobileBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('drawer-open');
-        backdrop.classList.toggle('active');
+    if (moreBtn && bottomSheet && sheetBackdrop) {
+      moreBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        App.toggleMoreSheet();
       });
 
-      backdrop.addEventListener('click', () => {
-        sidebar.classList.remove('drawer-open');
-        backdrop.classList.remove('active');
+      sheetBackdrop.addEventListener('click', () => {
+        App.closeMoreSheet();
       });
     }
 
-    // Close drawer when clicking a navigation link on mobile
-    const navLinks = document.querySelectorAll('.sidebar-nav-item');
-    navLinks.forEach(link => {
-      link.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-          sidebar?.classList.remove('drawer-open');
-          backdrop?.classList.remove('active');
-        }
+    // Attach click listeners to More sheet navigation items to close after click
+    const sheetItems = document.querySelectorAll('.bottom-sheet-item');
+    sheetItems.forEach(item => {
+      item.addEventListener('click', () => {
+        App.closeMoreSheet();
       });
     });
   },
 
+  // Toggle Mobile More Sheet
+  toggleMoreSheet: () => {
+    const bottomSheet = document.getElementById('mobile-more-sheet');
+    const sheetBackdrop = document.getElementById('bottom-sheet-backdrop');
+    if (bottomSheet && sheetBackdrop) {
+      const isOpen = bottomSheet.classList.contains('active');
+      if (isOpen) {
+        App.closeMoreSheet();
+      } else {
+        bottomSheet.classList.add('active');
+        sheetBackdrop.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        Utils.renderIcons();
+      }
+    }
+  },
+
+  closeMoreSheet: () => {
+    const bottomSheet = document.getElementById('mobile-more-sheet');
+    const sheetBackdrop = document.getElementById('bottom-sheet-backdrop');
+    if (bottomSheet && sheetBackdrop) {
+      bottomSheet.classList.remove('active');
+      sheetBackdrop.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  },
+
   // Route Dispatcher
   navigateTo: (route) => {
-    // Extract route base (e.g. "student-profile?id=123" -> "student-profile")
     const routeBase = route.split('?')[0] || 'dashboard';
     App.currentRoute = routeBase;
+
+    // Close More sheet if open
+    App.closeMoreSheet();
 
     // Hide all views
     const views = document.querySelectorAll('.page-view');
     views.forEach(v => v.classList.remove('active'));
 
-    // Highlight active nav item
-    const navItems = document.querySelectorAll('.sidebar-nav-item');
-    navItems.forEach(item => {
+    // Highlight active Desktop Sidebar nav item
+    const desktopNavItems = document.querySelectorAll('.sidebar-nav-item');
+    desktopNavItems.forEach(item => {
+      const itemRoute = item.getAttribute('data-route');
+      if (itemRoute === routeBase) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+
+    // Highlight active Mobile Bottom Bar item
+    const mobileNavItems = document.querySelectorAll('.mobile-nav-item');
+    mobileNavItems.forEach(item => {
       const itemRoute = item.getAttribute('data-route');
       if (itemRoute === routeBase) {
         item.classList.add('active');
@@ -106,24 +143,23 @@ const App = {
     if (targetView) {
       targetView.classList.add('active');
     } else {
-      // Fallback to dashboard
       document.getElementById('view-dashboard')?.classList.add('active');
       App.currentRoute = 'dashboard';
     }
 
     // Update Header Titles
     const routeTitles = {
-      'dashboard': 'Dashboard Overview',
+      'dashboard': 'Dashboard',
       'students': 'Student Directory',
-      'student-profile': 'Student Financial Profile',
-      'fee-collection': 'Fee Collection & Payments',
-      'monthly-fees': 'Monthly Fees & Invoices',
-      'fee-structure': 'Fee Structure Matrix',
-      'promotions': 'Academic Student Promotions',
+      'student-profile': 'Student Profile',
+      'fee-collection': 'Fee Collection',
+      'monthly-fees': 'Monthly Fees',
+      'fee-structure': 'Fee Structure',
+      'promotions': 'Student Promotions',
       'receipts': 'Payment Receipts',
       'reports': 'Reports & Analytics',
-      'settings': 'System Settings',
-      'excel-import': 'Excel Workbook Importer'
+      'settings': 'Settings',
+      'excel-import': 'Excel Importer'
     };
 
     const titleEl = document.getElementById('header-page-title');
@@ -160,6 +196,7 @@ const App = {
       case 'settings':
         ProgrammesModule.renderProgrammesTable();
         SettingsModule.populateForm();
+        SettingsModule.renderAcademicYearsTable();
         break;
       case 'excel-import':
         ExcelImportModule.init();
@@ -174,7 +211,7 @@ const App = {
 
 window.App = App;
 
-// Bootstrap on DOM Content Loaded
+// Bootstrap on DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });

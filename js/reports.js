@@ -127,3 +127,4 @@ const ReportsModule = {
 };
 
 window.ReportsModule = ReportsModule;
+
