@@ -150,13 +150,25 @@ const DashboardModule = {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        resizeDelay: 50,
         plugins: {
           legend: { display: false }
         },
         scales: {
+          x: {
+            ticks: {
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 6,
+              font: { size: 10 }
+            }
+          },
           y: {
             beginAtZero: true,
-            ticks: { callback: v => '₹' + v.toLocaleString('en-IN') }
+            ticks: {
+              callback: v => '₹' + v.toLocaleString('en-IN'),
+              font: { size: 10 }
+            }
           }
         }
       }

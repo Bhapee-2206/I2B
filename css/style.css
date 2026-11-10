@@ -69,8 +69,18 @@
   padding: 0;
 }
 
-html, body {
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
   min-height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden !important;
+  position: relative;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: var(--bg-app);
   color: var(--text-main);
@@ -92,7 +102,11 @@ a {
 #app-container {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -111,44 +125,60 @@ a {
   z-index: 100;
   border-right: 1px solid #1e293b;
   transition: transform var(--transition-fast);
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .sidebar-brand {
-  height: var(--header-height);
+  min-height: var(--header-height);
   display: flex;
   align-items: center;
-  padding: 0 1.25rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #1e293b;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .brand-logo-img {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   object-fit: cover;
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .brand-text-wrap {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  flex: 1;
 }
 
 .brand-title {
-  font-size: 1.1rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: #ffffff;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .brand-subtitle {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: #64748b;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  margin-top: 2px;
 }
 
 .sidebar-nav {
@@ -276,6 +306,10 @@ a {
   flex-direction: column;
   background-color: var(--bg-app);
   width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .app-header {
@@ -289,12 +323,17 @@ a {
   position: sticky;
   top: 0;
   z-index: 90;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .header-brand-badge {
@@ -383,11 +422,19 @@ a {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .page-view {
   display: none;
   animation: fadeIn 0.15s ease-out;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .page-view.active {
