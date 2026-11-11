@@ -1803,10 +1803,36 @@
       <form onsubmit="PaymentsModule.savePayment(event)">
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Select Student <span class="required">*</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label class="form-label" style="margin: 0;">Select Student <span class="required">*</span></label>
+              <span id="payment-mode-label" style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">Single Student</span>
+            </div>
             <select id="payment-student-select" class="form-control" onchange="PaymentsModule.onStudentSelectChange(this.value)" required>
-              <!-- Dynamically populated -->
+              <!-- Dynamically populated with Programme & Grade info -->
             </select>
+
+            <!-- Selected Students Multi-Tags (Visible in Combined Mode) -->
+            <div id="payment-selected-students-tags" style="display: none; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;"></div>
+
+            <!-- Smart Linked / Sibling Profile Detection Notification -->
+            <div id="payment-linked-students-container"></div>
+
+            <!-- Toggle for Adding Sibling / Additional Student -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-add-sibling" onclick="PaymentsModule.toggleAddStudentSelect()" style="font-size: 0.78rem; padding: 0.25rem 0.65rem;">
+                <i data-lucide="user-plus" style="width: 13px; height: 13px;"></i> + Combine Another Student / Sibling
+              </button>
+            </div>
+
+            <!-- Additional Student Dropdown (Hidden by default) -->
+            <div id="payment-add-student-wrapper" style="display: none; margin-top: 0.5rem; background: var(--surface-subtle); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-light);">
+              <label style="font-size: 0.76rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">
+                Select Another Child / Profile to Settle on Same Receipt:
+              </label>
+              <select id="payment-secondary-student-select" class="form-control" onchange="PaymentsModule.onAddSecondaryStudent(this.value)">
+                <option value="">-- Choose Additional Student / Child --</option>
+              </select>
+            </div>
           </div>
 
           <div id="payment-invoices-checklist" style="margin-bottom: 1.25rem;">
@@ -1894,7 +1920,7 @@
 
         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 1rem;">
           <div>
-            <div>Student: <strong id="receipt-view-student-name">—</strong></div>
+            <div>Student / Profiles: <strong id="receipt-view-student-name">—</strong></div>
             <div style="font-size: 0.78rem; color: var(--text-muted);">ID: <span id="receipt-view-student-id">—</span></div>
             <div style="font-size: 0.78rem; color: var(--text-muted);">Parent: <span id="receipt-view-parent-name">—</span></div>
           </div>
@@ -1903,6 +1929,9 @@
             <div style="font-size: 0.78rem; color: var(--text-muted);">Phone: <span id="receipt-view-phone">—</span></div>
           </div>
         </div>
+
+        <!-- Itemized Fee / Multi-Profile Breakdown Table -->
+        <div id="receipt-items-table-container"></div>
 
         <div style="background: var(--surface-subtle); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; border: 1px solid var(--border-light);">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.88rem;">

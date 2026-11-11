@@ -190,6 +190,14 @@ CREATE TABLE IF NOT EXISTS public.invoice_allocations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.payment_allocations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id UUID NOT NULL REFERENCES public.payments(id) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+    allocated_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- M. PAYMENT RECEIPTS
 CREATE TABLE IF NOT EXISTS public.payment_receipts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -202,6 +210,25 @@ CREATE TABLE IF NOT EXISTS public.payment_receipts (
     cancelled_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS public.receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    receipt_number TEXT UNIQUE NOT NULL,
+    payment_id UUID REFERENCES public.payments(id) ON DELETE CASCADE,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    amount_paid NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    remaining_balance NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    whatsapp_status TEXT DEFAULT 'initiated',
+    is_immutable BOOLEAN DEFAULT true,
+    receipt_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE IF EXISTS public.receipts ADD COLUMN IF NOT EXISTS receipt_data JSONB;
+ALTER TABLE IF EXISTS public.receipts ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE IF EXISTS public.receipts ADD COLUMN IF NOT EXISTS remaining_balance NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE IF EXISTS public.payment_receipts ADD COLUMN IF NOT EXISTS receipt_data JSONB;
 
 -- N. ATTENDANCE PROGRAMME TIMETABLE RULES
 CREATE TABLE IF NOT EXISTS public.programme_attendance_rules (
