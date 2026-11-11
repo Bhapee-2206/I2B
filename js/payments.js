@@ -157,11 +157,10 @@ const PaymentsModule = {
     Utils.renderIcons();
   },
 
-  // Populate student dropdowns with clear Programme and Grade identifiers
-  populateStudentDropdowns: (selectedPrimaryId = null) => {
-    const primarySelect = document.getElementById('payment-student-select');
-    const secondarySelect = document.getElementById('payment-secondary-student-select');
-    if (!primarySelect) return;
+  // Populate student dropdown with clear Programme and Grade identifiers
+  populateStudentDropdown: (selectedId = null) => {
+    const studentSelect = document.getElementById('payment-student-select');
+    if (!studentSelect) return;
 
     const students = AppState.students || [];
 
@@ -182,30 +181,19 @@ const PaymentsModule = {
       return `${s.name} (${s.student_id})${progBadge} - Due: ${Utils.formatCurrency(bal)}`;
     };
 
-    primarySelect.innerHTML = '<option value="">-- Choose Student --</option>' + 
+    studentSelect.innerHTML = '<option value="">-- Choose Student --</option>' + 
       students.map(s => `
-        <option value="${s.id}" ${selectedPrimaryId === s.id ? 'selected' : ''}>
+        <option value="${s.id}" ${selectedId === s.id ? 'selected' : ''}>
           ${Utils.escapeHtml(formatOptionText(s))}
         </option>
       `).join('');
-
-    if (secondarySelect) {
-      secondarySelect.innerHTML = '<option value="">-- Choose Additional Student / Child / Profile --</option>' + 
-        students
-          .filter(s => !PaymentsModule.selectedStudentIds.includes(s.id))
-          .map(s => `
-            <option value="${s.id}">
-              ${Utils.escapeHtml(formatOptionText(s))}
-            </option>
-          `).join('');
-    }
   },
 
   // Open the Record Payment Modal
   openRecordPaymentModal: (studentId = null, preselectedInvoiceId = null) => {
     PaymentsModule.isSubmittingPayment = false;
     PaymentsModule.preselectedInvoiceId = preselectedInvoiceId;
-    PaymentsModule.selectedStudentIds = studentId ? [studentId] : [];
+    PaymentsModule.selectedStudentId = studentId;
 
     const dateInput = document.getElementById('payment-date-input');
     if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
@@ -218,172 +206,29 @@ const PaymentsModule = {
     const notesInput = document.getElementById('payment-notes-input');
     if (notesInput) notesInput.value = '';
 
-    const secondaryWrapper = document.getElementById('payment-add-student-wrapper');
-    if (secondaryWrapper) secondaryWrapper.style.display = 'none';
-
-    PaymentsModule.populateStudentDropdowns(studentId);
-    PaymentsModule.renderPaymentChecklist();
+    PaymentsModule.populateStudentDropdown(studentId);
+    PaymentsModule.renderPaymentChecklist(studentId);
 
     Utils.openModal('modal-record-payment');
   },
 
-  // When student is selected in primary dropdown
+  // When student is selected in dropdown
   onStudentSelectChange: (studentId) => {
-    PaymentsModule.selectedStudentIds = studentId ? [studentId] : [];
-    PaymentsModule.populateStudentDropdowns(studentId);
-    PaymentsModule.renderPaymentChecklist();
+    PaymentsModule.selectedStudentId = studentId;
+    PaymentsModule.renderPaymentChecklist(studentId);
   },
 
-  // Toggle secondary student selection
-  toggleAddStudentSelect: () => {
-    const wrapper = document.getElementById('payment-add-student-wrapper');
-    if (!wrapper) return;
-    wrapper.style.display = (wrapper.style.display === 'none' || !wrapper.style.display) ? 'block' : 'none';
-  },
-
-  // When secondary student is chosen to combine
-  onAddSecondaryStudent: (secondaryStudentId) => {
-    if (!secondaryStudentId) return;
-    if (!PaymentsModule.selectedStudentIds.includes(secondaryStudentId)) {
-      PaymentsModule.selectedStudentIds.push(secondaryStudentId);
-    }
-    const secondarySelect = document.getElementById('payment-secondary-student-select');
-    if (secondarySelect) secondarySelect.value = '';
-    const wrapper = document.getElementById('payment-add-student-wrapper');
-    if (wrapper) wrapper.style.display = 'none';
-
-    PaymentsModule.populateStudentDropdowns(PaymentsModule.selectedStudentIds[0] || null);
-    PaymentsModule.renderPaymentChecklist();
-  },
-
-  // Add a specific student to group
-  addStudentToGroup: (studentId) => {
-    if (!studentId) return;
-    if (!PaymentsModule.selectedStudentIds.includes(studentId)) {
-      PaymentsModule.selectedStudentIds.push(studentId);
-    }
-    PaymentsModule.populateStudentDropdowns(PaymentsModule.selectedStudentIds[0] || null);
-    PaymentsModule.renderPaymentChecklist();
-  },
-
-  // Remove a student from group
-  removeStudentFromGroup: (studentId) => {
-    PaymentsModule.selectedStudentIds = PaymentsModule.selectedStudentIds.filter(id => id !== studentId);
-    const primarySelect = document.getElementById('payment-student-select');
-    if (primarySelect) {
-      primarySelect.value = PaymentsModule.selectedStudentIds[0] || '';
-    }
-    PaymentsModule.populateStudentDropdowns(PaymentsModule.selectedStudentIds[0] || null);
-    PaymentsModule.renderPaymentChecklist();
-  },
-
-  // Smart detect linked profiles (same parent phone, same student name, or same parent name)
-  findLinkedCandidateStudents: () => {
-    if (PaymentsModule.selectedStudentIds.length === 0 || !AppState.students) return [];
-
-    const selectedStudents = AppState.students.filter(s => PaymentsModule.selectedStudentIds.includes(s.id));
-    if (selectedStudents.length === 0) return [];
-
-    const candidates = [];
-    const candidateIds = new Set();
-
-    for (const cur of selectedStudents) {
-      const curPhone = (cur.whatsapp_number || '').replace(/\D/g, '').slice(-10);
-      const curParent = (cur.parent_name || '').trim().toLowerCase();
-      const curName = (cur.name || '').trim().toLowerCase();
-
-      for (const s of AppState.students) {
-        if (PaymentsModule.selectedStudentIds.includes(s.id) || candidateIds.has(s.id)) continue;
-
-        const sPhone = (s.whatsapp_number || '').replace(/\D/g, '').slice(-10);
-        const sParent = (s.parent_name || '').trim().toLowerCase();
-        const sName = (s.name || '').trim().toLowerCase();
-
-        const phoneMatch = curPhone.length >= 8 && sPhone.length >= 8 && curPhone === sPhone;
-        const nameMatch = curName.length >= 3 && curName === sName;
-        const parentMatch = curParent.length >= 3 && curParent === sParent;
-
-        if (phoneMatch || nameMatch || parentMatch) {
-          candidateIds.add(s.id);
-          candidates.push({
-            student: s,
-            matchReason: phoneMatch ? 'Matching WhatsApp Phone' : (nameMatch ? 'Same Student Name (Different Category)' : 'Matching Parent Name')
-          });
-        }
-      }
-    }
-
-    return candidates;
-  },
-
-  // Render the comprehensive payment checklist with selective category checkboxes
-  renderPaymentChecklist: () => {
+  // Render the category and invoice payment checklist for selected student
+  renderPaymentChecklist: (studentId = null) => {
     const container = document.getElementById('payment-invoices-checklist');
-    const modeLabel = document.getElementById('payment-mode-label');
-    const tagsContainer = document.getElementById('payment-selected-students-tags');
-    const linkedContainer = document.getElementById('payment-linked-students-container');
     const submitBtn = document.getElementById('btn-submit-payment') || document.querySelector('#modal-record-payment button[type="submit"]');
-
     if (!container) return;
 
-    const studentIds = PaymentsModule.selectedStudentIds;
+    const sId = studentId || PaymentsModule.selectedStudentId;
+    const student = (AppState.students || []).find(s => s.id === sId);
 
-    // Update Mode Label & Multi-Tags
-    if (studentIds.length > 1) {
-      if (modeLabel) {
-        modeLabel.innerHTML = `<span class="badge badge-paid" style="font-size: 0.74rem;"><i data-lucide="users" style="width: 12px; height: 12px;"></i> Combined Payment (${studentIds.length} Profiles)</span>`;
-      }
-      if (tagsContainer) {
-        tagsContainer.style.display = 'flex';
-        tagsContainer.innerHTML = studentIds.map(sId => {
-          const st = AppState.students.find(s => s.id === sId);
-          if (!st) return '';
-          return `
-            <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: var(--accent-light); color: var(--accent-blue); padding: 0.2rem 0.6rem; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 600;">
-              ${Utils.escapeHtml(st.name)} (${Utils.escapeHtml(st.student_id)})
-              <span onclick="PaymentsModule.removeStudentFromGroup('${st.id}')" title="Remove student" style="cursor: pointer; font-size: 1rem; line-height: 1; font-weight: bold; margin-left: 2px;">&times;</span>
-            </span>
-          `;
-        }).join('');
-      }
-    } else {
-      if (modeLabel) {
-        modeLabel.textContent = studentIds.length === 1 ? 'Single Student' : 'Select Student';
-      }
-      if (tagsContainer) {
-        tagsContainer.style.display = 'none';
-        tagsContainer.innerHTML = '';
-      }
-    }
-
-    // Smart Linked Suggestions
-    if (linkedContainer) {
-      const candidates = PaymentsModule.findLinkedCandidateStudents();
-      if (candidates.length > 0) {
-        linkedContainer.innerHTML = candidates.map(c => {
-          const cand = c.student;
-          const activeEnrs = (cand.enrollments || []).filter(e => e.status === 'active');
-          const progText = activeEnrs.map(e => e.programmes?.name || 'Tuition').join(', ') || cand.grade || 'Tuition';
-          const bal = StudentsModule.calculateOutstandingBalance(cand);
-          return `
-            <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: var(--radius-sm); padding: 0.55rem 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
-              <div style="color: var(--accent-blue); display: flex; align-items: center; gap: 0.4rem;">
-                <i data-lucide="link" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
-                <span><strong>${Utils.escapeHtml(cand.name)}</strong> (${Utils.escapeHtml(cand.student_id)} • ${Utils.escapeHtml(progText)}) — Due: <strong>${Utils.formatCurrency(bal)}</strong> <span style="font-size:0.72rem; color:var(--text-muted);">(${c.matchReason})</span></span>
-              </div>
-              <button type="button" class="btn btn-primary btn-sm" onclick="PaymentsModule.addStudentToGroup('${cand.id}')" style="font-size: 0.74rem; padding: 0.2rem 0.6rem; font-weight: 600;">
-                <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Combine in Receipt
-              </button>
-            </div>
-          `;
-        }).join('');
-      } else {
-        linkedContainer.innerHTML = '';
-      }
-    }
-
-    if (studentIds.length === 0) {
-      container.innerHTML = '<div class="text-muted" style="font-size: 0.82rem; padding: 0.5rem 0;">Please select a student to view outstanding fees & invoices.</div>';
+    if (!student) {
+      container.innerHTML = '<div class="text-muted" style="font-size: 0.82rem; padding: 0.5rem 0;">Please select a student to view outstanding fees.</div>';
       PaymentsModule.calculateSelectedInvoiceTotal();
       Utils.renderIcons();
       return;
@@ -393,133 +238,91 @@ const PaymentsModule = {
     const curMonth = now.getMonth() + 1;
     const curYear = now.getFullYear();
 
-    let checklistHtml = '';
-    let totalPayableCount = 0;
+    const activeEnrollments = (student.enrollments || []).filter(e => e.status === 'active');
+    const pendingInvoices = (student.invoices || [])
+      .filter(inv => inv.status !== 'cancelled' && (
+        inv.status === 'unpaid' ||
+        inv.status === 'partially_paid' ||
+        (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0
+      ))
+      .sort((a, b) => (a.billing_year * 100 + a.billing_month) - (b.billing_year * 100 + b.billing_month));
 
-    studentIds.forEach((sId, index) => {
-      const student = AppState.students.find(s => s.id === sId);
-      if (!student) return;
+    const outstandingDue = StudentsModule.calculateOutstandingBalance(student);
 
-      const activeEnrollments = (student.enrollments || []).filter(e => e.status === 'active');
-      const pendingInvoices = (student.invoices || [])
-        .filter(inv => inv.status !== 'cancelled' && (
-          inv.status === 'unpaid' ||
-          inv.status === 'partially_paid' ||
-          (parseFloat(inv.total_amount) - parseFloat(inv.paid_amount || 0)) > 0
-        ))
-        .sort((a, b) => (a.billing_year * 100 + a.billing_month) - (b.billing_year * 100 + b.billing_month));
+    let html = '';
+    let payableCount = 0;
 
-      const outstandingDue = StudentsModule.calculateOutstandingBalance(student);
-
-      const studentCardHeader = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: ${index > 0 ? '1rem' : '0.25rem'}; margin-bottom: 0.45rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border-light);">
-          <div>
-            <strong style="color: var(--text-main); font-size: 0.88rem;">${Utils.escapeHtml(student.name)}</strong>
-            <span style="font-size: 0.76rem; color: var(--text-muted); margin-left: 0.35rem;">(${Utils.escapeHtml(student.student_id)})</span>
-          </div>
-          <span style="font-size: 0.78rem; color: ${outstandingDue > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'}; font-weight: 700;">
-            Due: ${Utils.formatCurrency(outstandingDue)}
-          </span>
+    // 1. Pending Invoices (Already generated in DB)
+    if (pendingInvoices.length > 0) {
+      html += `
+        <div style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.45rem; color: var(--text-main);">
+          Outstanding Invoices (${pendingInvoices.length}):
         </div>
       `;
 
-      checklistHtml += studentCardHeader;
+      pendingInvoices.forEach(inv => {
+        const tot = parseFloat(inv.total_amount) || 0;
+        const pd = parseFloat(inv.paid_amount) || 0;
+        const bal = (inv.balance_amount !== undefined && inv.balance_amount !== null)
+          ? parseFloat(inv.balance_amount)
+          : Math.max(0, tot - pd);
+        const currentDue = inv.status === 'paid' ? 0 : Math.max(0, Math.min(bal, tot - pd));
 
-      // 1. Pending Invoices (Already generated in DB)
-      if (pendingInvoices.length > 0) {
-        pendingInvoices.forEach(inv => {
-          const tot = parseFloat(inv.total_amount) || 0;
-          const pd = parseFloat(inv.paid_amount) || 0;
-          const bal = (inv.balance_amount !== undefined && inv.balance_amount !== null)
-            ? parseFloat(inv.balance_amount)
-            : Math.max(0, tot - pd);
-          const currentDue = inv.status === 'paid' ? 0 : Math.max(0, Math.min(bal, tot - pd));
+        if (currentDue > 0) {
+          payableCount++;
+          const isPreselected = PaymentsModule.preselectedInvoiceId === inv.id || !PaymentsModule.preselectedInvoiceId;
+          const invLabel = `${inv.invoice_number} (${Utils.formatMonthYear(inv.billing_month, inv.billing_year)})`;
+          const noteDesc = inv.notes || `Tuition fee for ${Utils.formatMonthYear(inv.billing_month, inv.billing_year)}`;
 
-          if (currentDue > 0) {
-            totalPayableCount++;
-            const isPreselected = PaymentsModule.preselectedInvoiceId === inv.id || !PaymentsModule.preselectedInvoiceId;
-            const invLabel = `${inv.invoice_number} (${Utils.formatMonthYear(inv.billing_month, inv.billing_year)})`;
-            const noteDesc = inv.notes || `Tuition fee for ${Utils.formatMonthYear(inv.billing_month, inv.billing_year)}`;
-
-            checklistHtml += `
-              <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.84rem; cursor: pointer; margin-bottom: 0.35rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <input type="checkbox" class="payment-item-checkbox"
-                    data-student-id="${student.id}"
-                    data-student-name="${Utils.escapeHtml(student.name)}"
-                    data-student-code="${Utils.escapeHtml(student.student_id)}"
-                    data-type="invoice"
-                    data-id="${inv.id}"
-                    data-amount="${currentDue}"
-                    data-label="${Utils.escapeHtml(invLabel)}"
-                    data-month="${inv.billing_month}"
-                    data-year="${inv.billing_year}"
-                    ${isPreselected ? 'checked' : ''}
-                    onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
-                  <div>
-                    <div style="font-weight: 600;">${Utils.escapeHtml(invLabel)}</div>
-                    <div style="font-size: 0.73rem; color: var(--text-muted);">${Utils.escapeHtml(noteDesc)}</div>
-                  </div>
-                </div>
-                <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(currentDue)}</span>
-              </label>
-            `;
-          }
-        });
-      } else if (activeEnrollments.length > 0) {
-        // 2. Active Enrolments for this month (Not yet generated in invoices table)
-        activeEnrollments.forEach(enr => {
-          const fee = parseFloat(enr.agreed_fee) || 0;
-          if (fee > 0) {
-            totalPayableCount++;
-            const progName = enr.programmes?.name || 'Tuition';
-            const gradeText = enr.class_or_grade ? ` (${enr.class_or_grade})` : '';
-            const itemLabel = `${progName}${gradeText} - ${Utils.formatMonthYear(curMonth, curYear)}`;
-
-            checklistHtml += `
-              <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.84rem; cursor: pointer; margin-bottom: 0.35rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <input type="checkbox" class="payment-item-checkbox"
-                    data-student-id="${student.id}"
-                    data-student-name="${Utils.escapeHtml(student.name)}"
-                    data-student-code="${Utils.escapeHtml(student.student_id)}"
-                    data-type="enrollment"
-                    data-id="${enr.id}"
-                    data-programme-id="${enr.programme_id}"
-                    data-grade="${Utils.escapeHtml(enr.class_or_grade || '')}"
-                    data-amount="${fee}"
-                    data-label="${Utils.escapeHtml(itemLabel)}"
-                    data-month="${curMonth}"
-                    data-year="${curYear}"
-                    checked
-                    onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
-                  <div>
-                    <div style="font-weight: 600;">${Utils.escapeHtml(itemLabel)}</div>
-                    <div style="font-size: 0.73rem; color: var(--text-muted);">Current month tuition category</div>
-                  </div>
-                </div>
-                <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(fee)}</span>
-              </label>
-            `;
-          }
-        });
-      } else {
-        // 3. Fallback if student has flat monthly fee
-        const monthlyFee = StudentsModule.calculateMonthlyFee(student);
-        const feeToCollect = outstandingDue > 0 ? outstandingDue : monthlyFee;
-        if (feeToCollect > 0) {
-          totalPayableCount++;
-          const itemLabel = `Tuition Fee - ${Utils.formatMonthYear(curMonth, curYear)}`;
-          checklistHtml += `
+          html += `
             <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.84rem; cursor: pointer; margin-bottom: 0.35rem;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <input type="checkbox" class="payment-item-checkbox"
                   data-student-id="${student.id}"
-                  data-student-name="${Utils.escapeHtml(student.name)}"
-                  data-student-code="${Utils.escapeHtml(student.student_id)}"
-                  data-type="general"
-                  data-id="fee-${student.id}"
-                  data-amount="${feeToCollect}"
+                  data-type="invoice"
+                  data-id="${inv.id}"
+                  data-amount="${currentDue}"
+                  data-label="${Utils.escapeHtml(invLabel)}"
+                  data-month="${inv.billing_month}"
+                  data-year="${inv.billing_year}"
+                  ${isPreselected ? 'checked' : ''}
+                  onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
+                <div>
+                  <div style="font-weight: 600;">${Utils.escapeHtml(invLabel)}</div>
+                  <div style="font-size: 0.73rem; color: var(--text-muted);">${Utils.escapeHtml(noteDesc)}</div>
+                </div>
+              </div>
+              <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(currentDue)}</span>
+            </label>
+          `;
+        }
+      });
+    } else if (activeEnrollments.length > 0) {
+      // 2. Active Enrolments for this month (Enables selective category payment: e.g. pay Subject now, pay Hindi later)
+      html += `
+        <div style="font-size: 0.82rem; font-weight: 700; margin-bottom: 0.45rem; color: var(--text-main);">
+          Select Fee Categories to Settle (${Utils.formatMonthYear(curMonth, curYear)}):
+        </div>
+      `;
+
+      activeEnrollments.forEach(enr => {
+        const fee = parseFloat(enr.agreed_fee) || 0;
+        if (fee > 0) {
+          payableCount++;
+          const progName = enr.programmes?.name || 'Tuition';
+          const gradeText = enr.class_or_grade ? ` (${enr.class_or_grade})` : '';
+          const itemLabel = `${progName}${gradeText}`;
+
+          html += `
+            <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.84rem; cursor: pointer; margin-bottom: 0.35rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" class="payment-item-checkbox"
+                  data-student-id="${student.id}"
+                  data-type="enrollment"
+                  data-id="${enr.id}"
+                  data-programme-id="${enr.programme_id}"
+                  data-grade="${Utils.escapeHtml(enr.class_or_grade || '')}"
+                  data-amount="${fee}"
                   data-label="${Utils.escapeHtml(itemLabel)}"
                   data-month="${curMonth}"
                   data-year="${curYear}"
@@ -527,33 +330,60 @@ const PaymentsModule = {
                   onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
                 <div>
                   <div style="font-weight: 600;">${Utils.escapeHtml(itemLabel)}</div>
-                  <div style="font-size: 0.73rem; color: var(--text-muted);">Monthly tuition due</div>
+                  <div style="font-size: 0.73rem; color: var(--text-muted);">Monthly tuition fee</div>
                 </div>
               </div>
-              <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(feeToCollect)}</span>
+              <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(fee)}</span>
             </label>
           `;
         }
-      }
-
-      // Check if student has no remaining dues
-      if (outstandingDue <= 0 && pendingInvoices.length === 0 && totalPayableCount === 0) {
-        checklistHtml += `
-          <div style="background: rgba(16, 185, 129, 0.08); padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.8rem; border: 1px solid rgba(16, 185, 129, 0.3); color: var(--status-paid); font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
-            <i data-lucide="check-circle" style="width: 15px; height: 15px;"></i>
-            Fees for ${Utils.escapeHtml(student.name)} are fully settled for ${Utils.formatMonthYear(curMonth, curYear)} (₹0 Due).
-          </div>
+      });
+    } else {
+      // 3. Fallback to flat monthly fee
+      const monthlyFee = StudentsModule.calculateMonthlyFee(student);
+      const feeToCollect = outstandingDue > 0 ? outstandingDue : monthlyFee;
+      if (feeToCollect > 0) {
+        payableCount++;
+        const itemLabel = `Tuition Fee - ${Utils.formatMonthYear(curMonth, curYear)}`;
+        html += `
+          <label style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 0.84rem; cursor: pointer; margin-bottom: 0.35rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" class="payment-item-checkbox"
+                data-student-id="${student.id}"
+                data-type="general"
+                data-id="fee-${student.id}"
+                data-amount="${feeToCollect}"
+                data-label="${Utils.escapeHtml(itemLabel)}"
+                data-month="${curMonth}"
+                data-year="${curYear}"
+                checked
+                onchange="PaymentsModule.calculateSelectedInvoiceTotal()">
+              <div>
+                <div style="font-weight: 600;">${Utils.escapeHtml(itemLabel)}</div>
+                <div style="font-size: 0.73rem; color: var(--text-muted);">Monthly tuition due</div>
+              </div>
+            </div>
+            <span style="font-weight: 700; color: var(--status-unpaid); font-size: 0.95rem;">${Utils.formatCurrency(feeToCollect)}</span>
+          </label>
         `;
       }
-    });
+    }
 
-    container.innerHTML = checklistHtml || '<div class="text-muted" style="font-size:0.82rem; padding:0.5rem 0;">No pending fees for selected profiles.</div>';
+    if (payableCount === 0 && outstandingDue <= 0) {
+      html = `
+        <div style="background: rgba(16, 185, 129, 0.08); padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.82rem; border: 1px solid rgba(16, 185, 129, 0.3); color: var(--status-paid); font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+          <i data-lucide="check-circle" style="width: 16px; height: 16px;"></i>
+          Fees for ${Utils.escapeHtml(student.name)} are fully settled for ${Utils.formatMonthYear(curMonth, curYear)} (₹0 Due).
+        </div>
+      `;
+    }
 
+    container.innerHTML = html;
     PaymentsModule.calculateSelectedInvoiceTotal();
     Utils.renderIcons();
   },
 
-  // Calculate sum of all checked checkboxes and update amount input
+  // Calculate sum of checked checkboxes and update amount input
   calculateSelectedInvoiceTotal: () => {
     const checkboxes = document.querySelectorAll('.payment-item-checkbox:checked');
     let sum = 0;
@@ -579,12 +409,13 @@ const PaymentsModule = {
     }
   },
 
-  // RECORD PAYMENT (Supports Multi-Student / Sibling & Category-wise Selective Allocation)
+  // RECORD PAYMENT (Supports Category-wise Selective Allocation & Instant Receipt)
   savePayment: async (e) => {
     e.preventDefault();
 
     if (PaymentsModule.isSubmittingPayment) return;
 
+    const studentId = document.getElementById('payment-student-select').value;
     const checkedBoxes = Array.from(document.querySelectorAll('.payment-item-checkbox:checked'));
     const payment_date = document.getElementById('payment-date-input').value;
     const amount = parseFloat(document.getElementById('payment-amount-input').value) || 0;
@@ -592,34 +423,14 @@ const PaymentsModule = {
     const transaction_reference = document.getElementById('payment-ref-input').value.trim() || null;
     const notes = document.getElementById('payment-notes-input').value.trim() || null;
 
-    if (checkedBoxes.length === 0 || amount <= 0) {
-      Utils.showToast("Selection Required", "Please select at least one fee category or invoice to settle.", "warning");
+    if (!studentId || checkedBoxes.length === 0 || amount <= 0) {
+      Utils.showToast("Selection Required", "Please select a student and at least one fee category to settle.", "warning");
       return;
     }
 
-    // Group selected items by studentId
-    const itemsByStudent = {};
-    checkedBoxes.forEach(cb => {
-      const sId = cb.dataset.studentId;
-      if (!itemsByStudent[sId]) itemsByStudent[sId] = [];
-      itemsByStudent[sId].push({
-        studentId: sId,
-        studentName: cb.dataset.studentName,
-        studentCode: cb.dataset.studentCode,
-        type: cb.dataset.type,
-        id: cb.dataset.id,
-        programmeId: cb.dataset.programmeId,
-        grade: cb.dataset.grade,
-        amount: parseFloat(cb.dataset.amount) || 0,
-        label: cb.dataset.label,
-        month: parseInt(cb.dataset.month, 10),
-        year: parseInt(cb.dataset.year, 10)
-      });
-    });
-
-    const studentIds = Object.keys(itemsByStudent);
-    if (studentIds.length === 0) {
-      Utils.showToast("Error", "No students selected for payment.", "error");
+    const student = (AppState.students || []).find(s => s.id === studentId);
+    if (!student) {
+      Utils.showToast("Error", "Student record not found", "error");
       return;
     }
 
@@ -631,191 +442,174 @@ const PaymentsModule = {
     }
 
     try {
-      const primaryStudentId = studentIds[0];
-      const primaryStudent = AppState.students.find(s => s.id === primaryStudentId);
-      const isCombined = studentIds.length > 1;
+      const selectedItems = checkedBoxes.map(cb => ({
+        type: cb.dataset.type,
+        id: cb.dataset.id,
+        programmeId: cb.dataset.programmeId,
+        grade: cb.dataset.grade,
+        amount: parseFloat(cb.dataset.amount) || 0,
+        label: cb.dataset.label,
+        month: parseInt(cb.dataset.month, 10),
+        year: parseInt(cb.dataset.year, 10)
+      }));
 
-      const createdPaymentIds = [];
-      const consolidatedStudentSummaries = [];
+      // Resolve or create invoice for enrollment items
+      for (const item of selectedItems) {
+        if (item.type === 'enrollment' || item.type === 'general') {
+          const curMonth = item.month;
+          const curYear = item.year;
+          let existingCycleInv = (student?.invoices || []).find(i => 
+            i.billing_month === curMonth && i.billing_year === curYear && i.status !== 'cancelled'
+          );
 
-      for (const sId of studentIds) {
-        const student = AppState.students.find(s => s.id === sId);
-        const sItems = itemsByStudent[sId];
-        const studentAmount = sItems.reduce((acc, it) => acc + it.amount, 0);
+          if (!existingCycleInv && supabaseClient) {
+            const invNumber = Utils.getNextInvoiceNumber(student.student_id, curMonth, curYear);
+            const defaultDueDay = AppState.institution?.default_due_day || 10;
+            const dueDate = `${curYear}-${String(curMonth).padStart(2, '0')}-${String(Math.min(defaultDueDay, 28)).padStart(2, '0')}`;
 
-        if (studentAmount <= 0) continue;
+            try {
+              const { data: newInv, error: invErr } = await supabaseClient
+                .from('invoices')
+                .insert([{
+                  invoice_number: invNumber,
+                  student_id: studentId,
+                  billing_month: curMonth,
+                  billing_year: curYear,
+                  invoice_date: payment_date || new Date().toISOString().slice(0, 10),
+                  due_date: dueDate,
+                  total_amount: item.amount,
+                  paid_amount: 0,
+                  balance_amount: item.amount,
+                  status: 'unpaid',
+                  notes: item.label
+                }])
+                .select();
 
-        // Resolve or create invoice for enrollment items
-        for (const item of sItems) {
-          if (item.type === 'enrollment' || item.type === 'general') {
-            const curMonth = item.month;
-            const curYear = item.year;
-            let existingCycleInv = (student?.invoices || []).find(i => 
-              i.billing_month === curMonth && i.billing_year === curYear && i.status !== 'cancelled'
-            );
-
-            if (!existingCycleInv && supabaseClient) {
-              const invNumber = Utils.getNextInvoiceNumber(student.student_id, curMonth, curYear);
-              const defaultDueDay = AppState.institution?.default_due_day || 10;
-              const dueDate = `${curYear}-${String(curMonth).padStart(2, '0')}-${String(Math.min(defaultDueDay, 28)).padStart(2, '0')}`;
-
-              try {
-                const { data: newInv, error: invErr } = await supabaseClient
-                  .from('invoices')
-                  .insert([{
-                    invoice_number: invNumber,
-                    student_id: sId,
-                    billing_month: curMonth,
-                    billing_year: curYear,
-                    invoice_date: payment_date || new Date().toISOString().slice(0, 10),
-                    due_date: dueDate,
-                    total_amount: item.amount,
-                    paid_amount: 0,
-                    balance_amount: item.amount,
-                    status: 'unpaid',
-                    notes: item.label
-                  }])
-                  .select();
-
-                if (!invErr && newInv && newInv[0]) {
-                  existingCycleInv = newInv[0];
-                  item.type = 'invoice';
-                  item.id = existingCycleInv.id;
-                  student.invoices = student.invoices || [];
-                  student.invoices.push(existingCycleInv);
-                }
-              } catch (createErr) {
-                console.warn("Auto-invoice generation notice:", createErr);
+              if (!invErr && newInv && newInv[0]) {
+                existingCycleInv = newInv[0];
+                item.type = 'invoice';
+                item.id = existingCycleInv.id;
+                student.invoices = student.invoices || [];
+                student.invoices.push(existingCycleInv);
               }
-            } else if (existingCycleInv) {
-              item.type = 'invoice';
-              item.id = existingCycleInv.id;
+            } catch (createErr) {
+              console.warn("Auto-invoice generation notice:", createErr);
             }
+          } else if (existingCycleInv) {
+            item.type = 'invoice';
+            item.id = existingCycleInv.id;
           }
         }
-
-        // Insert payment record for this student
-        const paymentNumber = `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
-        let studentPaymentId = null;
-
-        if (supabaseClient) {
-          const { data: pmtData, error: pmtErr } = await supabaseClient
-            .from('payments')
-            .insert([{
-              payment_number: paymentNumber,
-              student_id: sId,
-              payment_date,
-              amount: studentAmount,
-              payment_method,
-              transaction_reference,
-              notes: notes ? `${notes} (${sItems.map(it => it.label).join('; ')})` : sItems.map(it => it.label).join('; '),
-              status: 'completed',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }])
-            .select();
-
-          if (pmtErr) throw pmtErr;
-          studentPaymentId = pmtData[0].id;
-          createdPaymentIds.push(studentPaymentId);
-
-          // Update invoices & insert allocations
-          for (const item of sItems) {
-            if (item.type === 'invoice' && item.id) {
-              const inv = (student.invoices || []).find(i => i.id === item.id);
-              const currentPaid = inv ? (parseFloat(inv.paid_amount) || 0) : 0;
-              const newPaid = currentPaid + item.amount;
-              const total = inv ? (parseFloat(inv.total_amount) || 0) : item.amount;
-              const newBalance = Math.max(0, total - newPaid);
-              const newStatus = newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partially_paid' : 'unpaid');
-
-              try {
-                await supabaseClient
-                  .from('invoices')
-                  .update({
-                    paid_amount: newPaid,
-                    balance_amount: newBalance,
-                    status: newStatus,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', item.id);
-              } catch (_) {}
-
-              // Try payment_allocations, fallback to invoice_allocations
-              try {
-                await supabaseClient
-                  .from('payment_allocations')
-                  .insert([{
-                    payment_id: studentPaymentId,
-                    invoice_id: item.id,
-                    allocated_amount: item.amount,
-                    created_at: new Date().toISOString()
-                  }]);
-              } catch (_) {
-                try {
-                  await supabaseClient
-                    .from('invoice_allocations')
-                    .insert([{
-                      payment_id: studentPaymentId,
-                      invoice_id: item.id,
-                      amount: item.amount,
-                      created_at: new Date().toISOString()
-                    }]);
-                } catch (allocErr) {
-                  console.warn("Allocation insert note:", allocErr);
-                }
-              }
-            }
-          }
-        }
-
-        const balAfter = Math.max(0, StudentsModule.calculateOutstandingBalance(student) - studentAmount);
-        consolidatedStudentSummaries.push({
-          id: sId,
-          name: student?.name || sItems[0].studentName,
-          student_id: student?.student_id || sItems[0].studentCode,
-          parent_name: student?.parent_name || '',
-          whatsapp_number: student?.whatsapp_number || '',
-          amount_paid: studentAmount,
-          remaining_balance: balAfter,
-          payment_id: studentPaymentId,
-          items: sItems.map(it => ({
-            label: it.label,
-            amount: it.amount
-          }))
-        });
       }
 
-      // Generate Single Official Receipt (Consolidated for multi-student or single student)
+      // Record payment
+      const paymentNumber = `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      let paymentId = null;
+
+      if (supabaseClient) {
+        const itemLabels = selectedItems.map(it => it.label).join('; ');
+        const finalNotes = notes ? `${notes} (${itemLabels})` : itemLabels;
+
+        const { data: pmtData, error: pmtErr } = await supabaseClient
+          .from('payments')
+          .insert([{
+            payment_number: paymentNumber,
+            student_id: studentId,
+            payment_date,
+            amount: amount,
+            payment_method,
+            transaction_reference,
+            notes: finalNotes,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select();
+
+        if (pmtErr) throw pmtErr;
+        paymentId = pmtData[0].id;
+
+        // Apply allocations & update invoices
+        for (const item of selectedItems) {
+          if (item.type === 'invoice' && item.id) {
+            const inv = (student.invoices || []).find(i => i.id === item.id);
+            const currentPaid = inv ? (parseFloat(inv.paid_amount) || 0) : 0;
+            const newPaid = currentPaid + item.amount;
+            const total = inv ? (parseFloat(inv.total_amount) || 0) : item.amount;
+            const newBalance = Math.max(0, total - newPaid);
+            const newStatus = newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partially_paid' : 'unpaid');
+
+            try {
+              await supabaseClient
+                .from('invoices')
+                .update({
+                  paid_amount: newPaid,
+                  balance_amount: newBalance,
+                  status: newStatus,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', item.id);
+            } catch (_) {}
+
+            try {
+              await supabaseClient
+                .from('payment_allocations')
+                .insert([{
+                  payment_id: paymentId,
+                  invoice_id: item.id,
+                  allocated_amount: item.amount,
+                  created_at: new Date().toISOString()
+                }]);
+            } catch (_) {
+              try {
+                await supabaseClient
+                  .from('invoice_allocations')
+                  .insert([{
+                    payment_id: paymentId,
+                    invoice_id: item.id,
+                    amount: item.amount,
+                    created_at: new Date().toISOString()
+                  }]);
+              } catch (_) {}
+            }
+          }
+        }
+      }
+
+      // Generate receipt
       const receiptNumber = Utils.getNextReceiptNumber();
-      const primaryPaymentId = createdPaymentIds[0] || null;
-      const totalRemainingBalance = consolidatedStudentSummaries.reduce((sum, s) => sum + s.remaining_balance, 0);
+      const currentBal = StudentsModule.calculateOutstandingBalance(student);
+      const remainingBalance = Math.max(0, currentBal - amount);
 
       const receiptPayload = {
-        is_combined: isCombined,
         receipt_number: receiptNumber,
         total_amount: amount,
         issue_date: payment_date,
         payment_method: payment_method,
         transaction_reference: transaction_reference,
-        primary_student_id: primaryStudentId,
-        students: consolidatedStudentSummaries,
+        student_id: studentId,
+        student_name: student.name,
+        student_code: student.student_id,
+        items: selectedItems.map(it => ({
+          label: it.label,
+          amount: it.amount
+        })),
         notes: notes
       };
 
       let receiptId = null;
 
-      if (supabaseClient && primaryPaymentId) {
+      if (supabaseClient && paymentId) {
         try {
           const { data: recData, error: recErr } = await supabaseClient
             .from('receipts')
             .insert([{
               receipt_number: receiptNumber,
-              payment_id: primaryPaymentId,
-              student_id: primaryStudentId,
+              payment_id: paymentId,
+              student_id: studentId,
               issue_date: payment_date,
               amount_paid: amount,
-              remaining_balance: totalRemainingBalance,
+              remaining_balance: remainingBalance,
               whatsapp_status: 'initiated',
               is_immutable: true,
               receipt_data: receiptPayload,
@@ -834,8 +628,8 @@ const PaymentsModule = {
               .from('payment_receipts')
               .insert([{
                 receipt_number: receiptNumber,
-                payment_id: primaryPaymentId,
-                student_id: primaryStudentId,
+                payment_id: paymentId,
+                student_id: studentId,
                 issue_date: payment_date,
                 receipt_data: receiptPayload,
                 created_at: new Date().toISOString()
@@ -849,12 +643,7 @@ const PaymentsModule = {
         }
       }
 
-      await AuthModule.logAudit('record_payment', 'payments', primaryStudentId, {
-        amount,
-        payment_method,
-        is_combined: isCombined,
-        students_count: studentIds.length
-      });
+      await AuthModule.logAudit('record_payment', 'payments', studentId, { amount, payment_method });
 
       Utils.closeModal('modal-record-payment');
       Utils.showToast("Payment Recorded", `Payment of ${Utils.formatCurrency(amount)} recorded successfully.`, "success");
@@ -867,7 +656,6 @@ const PaymentsModule = {
         await ReceiptsModule.loadReceipts();
       }
 
-      // Re-render ALL views so balances, badges and tables update instantly
       PaymentsModule.renderPaymentsTable();
       StudentsModule.renderStudentsTable();
       MonthlyFeesModule.renderMonthlyFeesTable();
@@ -882,7 +670,6 @@ const PaymentsModule = {
         await StudentsModule.viewProfile(StudentsModule.currentProfileStudentId);
       }
 
-      // Immediately display receipt with one-click WhatsApp action
       if (receiptId) {
         ReceiptsModule.viewReceipt(receiptId, true);
       }
