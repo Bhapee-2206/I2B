@@ -157,48 +157,55 @@ const PaymentsModule = {
     Utils.renderIcons();
   },
 
-  // Populate student dropdown with Smart Related Profiles grouped at the TOP, followed by other students
-  populateStudentDropdown: (filterQuery = '') => {
-    const studentSelect = document.getElementById('payment-student-select');
-    if (!studentSelect) return;
+  // Autocomplete Search: Focus Handler
+  onStudentSearchFocus: () => {
+    const input = document.getElementById('payment-student-search-input');
+    PaymentsModule.renderStudentSearchResults(input ? input.value : '');
+  },
+
+  // Autocomplete Search: Input Handler
+  onStudentSearchInput: (query) => {
+    const clearBtn = document.getElementById('payment-search-clear-btn');
+    if (clearBtn) {
+      clearBtn.style.display = query.trim() ? 'block' : 'none';
+    }
+    PaymentsModule.renderStudentSearchResults(query);
+  },
+
+  // Autocomplete Search: Clear Handler
+  clearStudentSearch: () => {
+    const input = document.getElementById('payment-student-search-input');
+    const clearBtn = document.getElementById('payment-search-clear-btn');
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    if (clearBtn) clearBtn.style.display = 'none';
+    PaymentsModule.renderStudentSearchResults('');
+  },
+
+  // Render floating search results pop-up
+  renderStudentSearchResults: (query = '') => {
+    const resultsContainer = document.getElementById('payment-student-search-results');
+    if (!resultsContainer) return;
 
     const students = AppState.students || [];
     const selectedIds = PaymentsModule.selectedStudentIds || [];
     const selectedStudents = students.filter(s => selectedIds.includes(s.id));
-
-    const formatOptionText = (s) => {
-      const bal = StudentsModule.calculateOutstandingBalance(s);
-      const activeEnrollments = (s.enrollments || []).filter(e => e.status === 'active');
-      let progDesc = '';
-      if (activeEnrollments.length > 0) {
-        progDesc = activeEnrollments.map(e => {
-          const pName = e.programmes?.name || 'Tuition';
-          const lvl = e.class_or_grade ? ` (${e.class_or_grade})` : '';
-          return `${pName}${lvl}`;
-        }).join(', ');
-      } else if (s.grade) {
-        progDesc = s.grade;
-      }
-      const progBadge = progDesc ? ` • [${progDesc}]` : '';
-      return `${s.name} (${s.student_id})${progBadge} - Due: ${Utils.formatCurrency(bal)}`;
-    };
-
-    const defaultLabel = selectedIds.length > 0
-      ? '+ Add Another Student / Profile to Receipt...'
-      : '-- Choose Student --';
+    const cleanQuery = (query || '').trim().toLowerCase();
 
     const availableStudents = students.filter(s => !selectedIds.includes(s.id));
-    const cleanQuery = (filterQuery || '').trim().toLowerCase();
 
     // Partition into related profiles (same phone, name, or parent) vs other students
     const relatedStudents = [];
     const otherStudents = [];
 
     availableStudents.forEach(s => {
-      // Filter check if query is provided
+      const activeEnrs = (s.enrollments || []).filter(e => e.status === 'active');
+      const progStr = activeEnrs.map(e => e.programmes?.name || '').join(' ').toLowerCase();
+
+      // Check query match if query provided
       if (cleanQuery) {
-        const activeEnrs = (s.enrollments || []).filter(e => e.status === 'active');
-        const progStr = activeEnrs.map(e => e.programmes?.name || '').join(' ').toLowerCase();
         const matches = (s.name || '').toLowerCase().includes(cleanQuery) ||
           (s.student_id || '').toLowerCase().includes(cleanQuery) ||
           (s.parent_name || '').toLowerCase().includes(cleanQuery) ||
@@ -215,6 +222,7 @@ const PaymentsModule = {
         const sName = (s.name || '').trim().toLowerCase();
 
         let isRelated = false;
+        let matchReason = '';
         for (const cur of selectedStudents) {
           const curPhone = (cur.whatsapp_number || '').replace(/\D/g, '').slice(-10);
           const curParent = (cur.parent_name || '').trim().toLowerCase();
@@ -224,14 +232,23 @@ const PaymentsModule = {
           const nameMatch = curName.length >= 3 && curName === sName;
           const parentMatch = curParent.length >= 3 && curParent === sParent;
 
-          if (phoneMatch || nameMatch || parentMatch) {
+          if (phoneMatch) {
             isRelated = true;
+            matchReason = 'Same Phone / Family';
+            break;
+          } else if (nameMatch) {
+            isRelated = true;
+            matchReason = 'Same Student (Different Category)';
+            break;
+          } else if (parentMatch) {
+            isRelated = true;
+            matchReason = 'Same Parent Name';
             break;
           }
         }
 
         if (isRelated) {
-          relatedStudents.push(s);
+          relatedStudents.push({ student: s, matchReason });
         } else {
           otherStudents.push(s);
         }
@@ -240,42 +257,108 @@ const PaymentsModule = {
       }
     });
 
-    let optionsHtml = `<option value="">${defaultLabel}</option>`;
-
-    // Place related profiles (same phone/name/parent) at the VERY TOP
-    if (relatedStudents.length > 0) {
-      optionsHtml += `<optgroup label="⭐ Related Profiles / Same Family (1-Click)">` + 
-        relatedStudents.map(s => `
-          <option value="${s.id}">
-            ⭐ ${Utils.escapeHtml(formatOptionText(s))}
-          </option>
-        `).join('') + 
-        `</optgroup>`;
-
-      if (otherStudents.length > 0) {
-        optionsHtml += `<optgroup label="All Other Students">` + 
-          otherStudents.map(s => `
-            <option value="${s.id}">
-              ${Utils.escapeHtml(formatOptionText(s))}
-            </option>
-          `).join('') + 
-          `</optgroup>`;
-      }
-    } else {
-      optionsHtml += otherStudents.map(s => `
-        <option value="${s.id}">
-          ${Utils.escapeHtml(formatOptionText(s))}
-        </option>
-      `).join('');
+    if (relatedStudents.length === 0 && otherStudents.length === 0) {
+      resultsContainer.innerHTML = `
+        <div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+          No matching student profiles found.
+        </div>
+      `;
+      resultsContainer.style.display = 'block';
+      return;
     }
 
-    studentSelect.innerHTML = optionsHtml;
-    studentSelect.value = '';
+    const renderStudentCard = (s, isRelated = false, matchReason = '') => {
+      const bal = StudentsModule.calculateOutstandingBalance(s);
+      const activeEnrs = (s.enrollments || []).filter(e => e.status === 'active');
+      let progText = '';
+      if (activeEnrs.length > 0) {
+        progText = activeEnrs.map(e => {
+          const pName = e.programmes?.name || 'Tuition';
+          const lvl = e.class_or_grade ? ` (${e.class_or_grade})` : '';
+          return `${pName}${lvl}`;
+        }).join(', ');
+      } else if (s.grade) {
+        progText = s.grade;
+      }
+
+      return `
+        <div class="search-result-item" onclick="PaymentsModule.selectStudent('${s.id}')"
+          style="padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--border-light, #f1f5f9); cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s ease;"
+          onmouseover="this.style.background='var(--surface-subtle, #f8fafc)'"
+          onmouseout="this.style.background='transparent'">
+          <div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">
+              ${isRelated ? '<span style="color: #f59e0b; margin-right: 4px;">⭐</span>' : ''}${Utils.escapeHtml(s.name)}
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-left: 4px;">(${Utils.escapeHtml(s.student_id)})</span>
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+              ${progText ? `<span style="background: rgba(14, 165, 233, 0.08); color: var(--accent-blue); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${Utils.escapeHtml(progText)}</span>` : ''}
+              ${s.parent_name ? `<span>Parent: ${Utils.escapeHtml(s.parent_name)}</span>` : ''}
+              ${isRelated ? `<span style="color: #d97706; font-weight: 600;">(${matchReason})</span>` : ''}
+            </div>
+          </div>
+          <div style="text-align: right; flex-shrink: 0; margin-left: 0.6rem;">
+            <div style="font-weight: 700; font-size: 0.92rem; color: ${bal > 0 ? 'var(--status-unpaid)' : 'var(--status-paid)'};">
+              ${Utils.formatCurrency(bal)}
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">${bal > 0 ? 'Due' : 'Settled'}</div>
+          </div>
+        </div>
+      `;
+    };
+
+    let html = '';
+
+    // Show related / family profiles first
+    if (relatedStudents.length > 0) {
+      html += `
+        <div style="background: rgba(245, 158, 11, 0.08); padding: 0.4rem 0.85rem; font-size: 0.74rem; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid rgba(245, 158, 11, 0.2);">
+          ⭐ Linked Profiles / Same Family (1-Tap Select)
+        </div>
+      `;
+      relatedStudents.forEach(item => {
+        html += renderStudentCard(item.student, true, item.matchReason);
+      });
+    }
+
+    // Show other students
+    if (otherStudents.length > 0) {
+      if (relatedStudents.length > 0) {
+        html += `
+          <div style="background: var(--surface-subtle); padding: 0.35rem 0.85rem; font-size: 0.73rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border-light);">
+            All Other Students
+          </div>
+        `;
+      }
+      // Limit to 20 when browsing without query to keep snappy
+      const toShow = cleanQuery ? otherStudents : otherStudents.slice(0, 15);
+      toShow.forEach(s => {
+        html += renderStudentCard(s, false);
+      });
+    }
+
+    resultsContainer.innerHTML = html;
+    resultsContainer.style.display = 'block';
   },
 
-  // Instant filter for the student dropdown
-  filterStudentDropdown: (query) => {
-    PaymentsModule.populateStudentDropdown(query);
+  // When user clicks a student card from the pop-up
+  selectStudent: (studentId) => {
+    if (!studentId) return;
+    if (!PaymentsModule.selectedStudentIds.includes(studentId)) {
+      PaymentsModule.selectedStudentIds.push(studentId);
+    }
+
+    // Close and clear search box
+    const searchInput = document.getElementById('payment-student-search-input');
+    const clearBtn = document.getElementById('payment-search-clear-btn');
+    const resultsContainer = document.getElementById('payment-student-search-results');
+
+    if (searchInput) searchInput.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (resultsContainer) resultsContainer.style.display = 'none';
+
+    PaymentsModule.updateSelectedStudentTags();
+    PaymentsModule.renderPaymentChecklist();
   },
 
   // Update selected student pill tags
@@ -330,39 +413,30 @@ const PaymentsModule = {
     if (refInput) refInput.value = '';
     const notesInput = document.getElementById('payment-notes-input');
     if (notesInput) notesInput.value = '';
-    const filterInput = document.getElementById('payment-student-filter-input');
-    if (filterInput) filterInput.value = '';
+
+    const searchInput = document.getElementById('payment-student-search-input');
+    if (searchInput) searchInput.value = '';
+    const clearBtn = document.getElementById('payment-search-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const resultsContainer = document.getElementById('payment-student-search-results');
+    if (resultsContainer) resultsContainer.style.display = 'none';
 
     PaymentsModule.updateSelectedStudentTags();
-    PaymentsModule.populateStudentDropdown();
     PaymentsModule.renderPaymentChecklist();
 
     Utils.openModal('modal-record-payment');
     Utils.renderIcons();
   },
 
-  // When student is selected in dropdown
-  onStudentSelectChange: (studentId) => {
-    if (!studentId) return;
-    if (!PaymentsModule.selectedStudentIds.includes(studentId)) {
-      PaymentsModule.selectedStudentIds.push(studentId);
-    }
-    const filterInput = document.getElementById('payment-student-filter-input');
-    if (filterInput) filterInput.value = '';
-
-    PaymentsModule.updateSelectedStudentTags();
-    PaymentsModule.populateStudentDropdown();
-    PaymentsModule.renderPaymentChecklist();
-  },
-
   // Remove a student from selection
   removeStudent: (studentId) => {
     PaymentsModule.selectedStudentIds = PaymentsModule.selectedStudentIds.filter(id => id !== studentId);
-    const filterInput = document.getElementById('payment-student-filter-input');
-    if (filterInput) filterInput.value = '';
+    const searchInput = document.getElementById('payment-student-search-input');
+    if (searchInput) searchInput.value = '';
+    const resultsContainer = document.getElementById('payment-student-search-results');
+    if (resultsContainer) resultsContainer.style.display = 'none';
 
     PaymentsModule.updateSelectedStudentTags();
-    PaymentsModule.populateStudentDropdown();
     PaymentsModule.renderPaymentChecklist();
   },
   // Render the category and invoice payment checklist for all selected profiles
@@ -1008,3 +1082,14 @@ const PaymentsModule = {
 };
 
 window.PaymentsModule = PaymentsModule;
+
+// Dismiss floating student search pop-up on outside click
+document.addEventListener('click', (e) => {
+  const container = document.getElementById('payment-student-search-results');
+  const input = document.getElementById('payment-student-search-input');
+  if (container && input && container.style.display !== 'none') {
+    if (!container.contains(e.target) && e.target !== input) {
+      container.style.display = 'none';
+    }
+  }
+}); // payment-student-search-results-dismiss

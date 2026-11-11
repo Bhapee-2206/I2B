@@ -1802,7 +1802,7 @@
 
       <form onsubmit="PaymentsModule.savePayment(event)">
         <div class="modal-body">
-          <div class="form-group" style="margin-bottom: 0.75rem;">
+          <div class="form-group" style="margin-bottom: 0.75rem; position: relative;">
             <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
               <span>Select Student Profile(s) <span class="required">*</span></span>
               <span id="payment-profile-count-badge" style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;"></span>
@@ -1810,19 +1810,22 @@
             <!-- Selected Student Tags (Pills) -->
             <div id="payment-selected-students-tags" style="display: none; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem;"></div>
             
-            <!-- Quick Filter / Search Bar to avoid scrolling -->
-            <div style="position: relative; margin-bottom: 0.4rem;">
-              <input type="text" id="payment-student-filter-input" class="form-control form-control-sm" 
-                placeholder="🔍 Type student name, ID, or programme to filter..." 
-                oninput="PaymentsModule.filterStudentDropdown(this.value)"
+            <!-- Autocomplete Search Input with Floating Pop-up Suggestions -->
+            <div style="position: relative;">
+              <input type="text" id="payment-student-search-input" class="form-control" 
+                placeholder="🔍 Type student name, ID, phone, or category to select..." 
+                onfocus="PaymentsModule.onStudentSearchFocus()"
+                oninput="PaymentsModule.onStudentSearchInput(this.value)"
                 autocomplete="off"
-                style="padding-left: 2rem; font-size: 0.8rem; height: 34px;">
-              <i data-lucide="search" style="position: absolute; left: 8px; top: 9px; width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;"></i>
+                style="padding-left: 2.2rem; font-size: 0.88rem; height: 38px;">
+              <i data-lucide="search" style="position: absolute; left: 11px; top: 11px; width: 16px; height: 16px; color: var(--text-muted); pointer-events: none;"></i>
+              <button type="button" id="payment-search-clear-btn" onclick="PaymentsModule.clearStudentSearch()" style="display: none; position: absolute; right: 8px; top: 8px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.15rem; line-height: 1; padding: 2px 6px;">&times;</button>
             </div>
 
-            <select id="payment-student-select" class="form-control" onchange="PaymentsModule.onStudentSelectChange(this.value)">
-              <!-- Dynamically populated with Priority Related Profiles on top & all students -->
-            </select>
+            <!-- Instant Pop-up Results List (Floating Dropdown) -->
+            <div id="payment-student-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1050; background: var(--surface-card, #ffffff); border: 1px solid var(--border-light, #e2e8f0); border-radius: var(--radius-md, 8px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); max-height: 260px; overflow-y: auto; margin-top: 4px;">
+              <!-- Populated dynamically with student result cards -->
+            </div>
           </div>
 
           <div id="payment-invoices-checklist" style="margin-bottom: 1.25rem;">
