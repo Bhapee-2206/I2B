@@ -1802,9 +1802,14 @@
 
       <form onsubmit="PaymentsModule.savePayment(event)">
         <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Select Student <span class="required">*</span></label>
-            <select id="payment-student-select" class="form-control" onchange="PaymentsModule.onStudentSelectChange(this.value)" required>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <span>Select Student Profile(s) <span class="required">*</span></span>
+              <span id="payment-profile-count-badge" style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;"></span>
+            </label>
+            <!-- Selected Student Tags (Pills) -->
+            <div id="payment-selected-students-tags" style="display: none; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem;"></div>
+            <select id="payment-student-select" class="form-control" onchange="PaymentsModule.onStudentSelectChange(this.value)">
               <!-- Dynamically populated with Programme & Grade info -->
             </select>
           </div>

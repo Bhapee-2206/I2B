@@ -140,7 +140,7 @@ const ReceiptsModule = {
     Utils.renderIcons();
   },
 
-  // View Receipt Modal
+  // View Receipt Modal (Supports Single & Combined Multi-Profile Receipts)
   viewReceipt: async (receiptId, isNewPayment = false) => {
     let r = (AppState.receipts || []).find(item => item.id === receiptId);
     if (!r) {
@@ -164,13 +164,27 @@ const ReceiptsModule = {
     const p = r.payments;
     const inst = AppState.institution;
     const rData = r.receipt_data || {};
+    const isCombined = rData.is_combined || (rData.students && rData.students.length > 1);
 
     document.getElementById('receipt-view-number').textContent = r.receipt_number;
     document.getElementById('receipt-view-date').textContent = Utils.formatDate(r.issue_date);
-    document.getElementById('receipt-view-student-name').textContent = s?.name || rData.student_name || '—';
-    document.getElementById('receipt-view-student-id').textContent = s?.student_id || rData.student_code || '—';
-    document.getElementById('receipt-view-parent-name').textContent = s?.parent_name || '—';
-    document.getElementById('receipt-view-phone').textContent = s?.whatsapp_number || '—';
+
+    if (isCombined && rData.students && rData.students.length > 0) {
+      const studentNames = rData.students.map(st => st.name).join(' & ');
+      const studentIds = rData.students.map(st => st.student_id).join(', ');
+      const parentName = rData.students[0]?.parent_name || s?.parent_name || '—';
+      const phone = rData.students[0]?.whatsapp_number || s?.whatsapp_number || '—';
+
+      document.getElementById('receipt-view-student-name').textContent = studentNames;
+      document.getElementById('receipt-view-student-id').textContent = studentIds;
+      document.getElementById('receipt-view-parent-name').textContent = parentName;
+      document.getElementById('receipt-view-phone').textContent = phone;
+    } else {
+      document.getElementById('receipt-view-student-name').textContent = s?.name || rData.students?.[0]?.name || '—';
+      document.getElementById('receipt-view-student-id').textContent = s?.student_id || rData.students?.[0]?.student_id || '—';
+      document.getElementById('receipt-view-parent-name').textContent = s?.parent_name || '—';
+      document.getElementById('receipt-view-phone').textContent = s?.whatsapp_number || '—';
+    }
 
     document.getElementById('receipt-view-amount-paid').textContent = Utils.formatCurrency(r.amount_paid);
     document.getElementById('receipt-view-method').textContent = p?.payment_method || rData.payment_method || 'UPI';
@@ -181,17 +195,41 @@ const ReceiptsModule = {
     document.getElementById('receipt-institution-address').textContent = inst?.address || 'Contact: +91 6385577966 / +91 9345999260 • i2btutioncentre@gmail.com';
     document.getElementById('receipt-footer-text').textContent = inst?.receipt_footer || 'Thank you for your prompt payment! This is an official computer-generated receipt.';
 
-    // Render Itemized Breakdown if items exist
+    // Render Itemized Breakdown Table
     const itemsContainer = document.getElementById('receipt-items-table-container');
     if (itemsContainer) {
-      if (rData.items && rData.items.length > 0) {
-        const rowsHtml = rData.items.map((it, idx) => `
-          <tr style="border-bottom: 1px solid var(--border-light);">
-            <td style="padding: 0.45rem 0.5rem; color: var(--text-muted); width: 25px;">${idx + 1}</td>
-            <td style="padding: 0.45rem 0.5rem;">${Utils.escapeHtml(it.label)}</td>
-            <td style="padding: 0.45rem 0.5rem; text-align: right; font-weight: 700; color: var(--text-main);">${Utils.formatCurrency(it.amount)}</td>
-          </tr>
-        `).join('');
+      if (rData.students && rData.students.length > 0) {
+        let rowsHtml = '';
+        let rowIdx = 1;
+        rData.students.forEach(st => {
+          if (st.items && st.items.length > 0) {
+            st.items.forEach(it => {
+              rowsHtml += `
+                <tr style="border-bottom: 1px solid var(--border-light);">
+                  <td style="padding: 0.45rem 0.5rem; color: var(--text-muted); width: 25px;">${rowIdx++}</td>
+                  <td style="padding: 0.45rem 0.5rem;">
+                    <strong>${Utils.escapeHtml(st.name)}</strong>
+                    <span style="font-size: 0.74rem; color: var(--text-muted); margin-left: 0.25rem;">(${Utils.escapeHtml(st.student_id)})</span>
+                  </td>
+                  <td style="padding: 0.45rem 0.5rem;">${Utils.escapeHtml(it.label)}</td>
+                  <td style="padding: 0.45rem 0.5rem; text-align: right; font-weight: 700; color: var(--text-main);">${Utils.formatCurrency(it.amount)}</td>
+                </tr>
+              `;
+            });
+          } else {
+            rowsHtml += `
+              <tr style="border-bottom: 1px solid var(--border-light);">
+                <td style="padding: 0.45rem 0.5rem; color: var(--text-muted); width: 25px;">${rowIdx++}</td>
+                <td style="padding: 0.45rem 0.5rem;">
+                  <strong>${Utils.escapeHtml(st.name)}</strong>
+                  <span style="font-size: 0.74rem; color: var(--text-muted); margin-left: 0.25rem;">(${Utils.escapeHtml(st.student_id)})</span>
+                </td>
+                <td style="padding: 0.45rem 0.5rem;">Tuition Fee Settlement</td>
+                <td style="padding: 0.45rem 0.5rem; text-align: right; font-weight: 700; color: var(--text-main);">${Utils.formatCurrency(st.amount_paid)}</td>
+              </tr>
+            `;
+          }
+        });
 
         itemsContainer.innerHTML = `
           <div style="margin-bottom: 1rem; border: 1px solid var(--border-light); border-radius: var(--radius-sm); overflow: hidden;">
@@ -199,6 +237,14 @@ const ReceiptsModule = {
               Fee Settlement Details
             </div>
             <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-light); background: rgba(0,0,0,0.02); text-align: left; font-size: 0.75rem; color: var(--text-muted);">
+                  <th style="padding: 0.35rem 0.5rem;">#</th>
+                  <th style="padding: 0.35rem 0.5rem;">Student Profile</th>
+                  <th style="padding: 0.35rem 0.5rem;">Fee Category / Period</th>
+                  <th style="padding: 0.35rem 0.5rem; text-align: right;">Amount</th>
+                </tr>
+              </thead>
               <tbody>
                 ${rowsHtml}
               </tbody>
@@ -236,6 +282,7 @@ const ReceiptsModule = {
     const s = r.students;
     const p = r.payments;
     const rData = r.receipt_data || {};
+    const isCombined = rData.is_combined || (rData.students && rData.students.length > 1);
 
     // Header Banner (Navy #0f172a)
     doc.setFillColor(15, 23, 42);
@@ -268,62 +315,104 @@ const ReceiptsModule = {
     doc.text(`Date: ${Utils.formatDate(r.issue_date)}`, 78, 43);
 
     // Student Info
+    const studentDisplayName = (isCombined && rData.students)
+      ? rData.students.map(st => st.name).join(' & ')
+      : (s?.name || rData.students?.[0]?.name || '—');
+    const studentDisplayId = (isCombined && rData.students)
+      ? rData.students.map(st => st.student_id).join(', ')
+      : (s?.student_id || rData.students?.[0]?.student_id || '—');
+    const parentDisplayName = (isCombined && rData.students?.[0]?.parent_name)
+      ? rData.students[0].parent_name
+      : (s?.parent_name || '—');
+    const phoneDisplay = (isCombined && rData.students?.[0]?.whatsapp_number)
+      ? rData.students[0].whatsapp_number
+      : (s?.whatsapp_number || '—');
+
     doc.setFontSize(9);
-    doc.text("Student ID:", 14, 53);
+    doc.text("Student ID:", 14, 52);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${s?.student_id || rData.student_code || '—'}`, 40, 53);
+    doc.text(`${studentDisplayId}`, 42, 52);
 
     doc.setFont('helvetica', 'normal');
-    doc.text("Student Name:", 14, 60);
+    doc.text("Student Name:", 14, 58);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${s?.name || rData.student_name || '—'}`, 40, 60);
+    doc.text(`${studentDisplayName}`, 42, 58);
 
     doc.setFont('helvetica', 'normal');
-    doc.text("Parent Name:", 14, 67);
-    doc.text(`${s?.parent_name || '—'}`, 40, 67);
+    doc.text("Parent Name:", 14, 64);
+    doc.text(`${parentDisplayName}`, 42, 64);
 
-    doc.text("WhatsApp Phone:", 14, 74);
-    doc.text(`${s?.whatsapp_number || '—'}`, 40, 74);
+    doc.text("WhatsApp Phone:", 14, 70);
+    doc.text(`${phoneDisplay}`, 42, 70);
 
     // Line
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 80, 134, 80);
+    doc.line(14, 75, 134, 75);
 
     // Table Header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text("Description", 14, 88);
-    doc.text("Payment Mode", 70, 88);
-    doc.text("Amount Received", 106, 88);
+    doc.setFontSize(8);
+    doc.text("Item / Description", 14, 81);
+    doc.text("Payment Mode", 72, 81);
+    doc.text("Amount Received", 106, 81);
 
+    let curY = 88;
     doc.setFont('helvetica', 'normal');
-    const descText = (rData.items && rData.items.length > 0)
-      ? rData.items.map(it => it.label).join(', ')
-      : "Tuition Fee Collection";
-    doc.text(descText.substring(0, 32), 14, 96);
-    doc.text(`${p?.payment_method || rData.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 70, 96);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129); // Green
-    doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 106, 96);
+
+    if (rData.students && rData.students.length > 0) {
+      rData.students.forEach(st => {
+        if (st.items && st.items.length > 0) {
+          st.items.forEach(it => {
+            if (curY > 120) return;
+            doc.text(`${st.name}: ${it.label}`.substring(0, 36), 14, curY);
+            doc.text(`${p?.payment_method || rData.payment_method || 'UPI'}`, 72, curY);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(16, 185, 129);
+            doc.text(`INR ${(it.amount || 0).toLocaleString('en-IN')}`, 106, curY);
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', 'normal');
+            curY += 6;
+          });
+        } else {
+          if (curY > 120) return;
+          doc.text(`${st.name} (${st.student_id})`.substring(0, 36), 14, curY);
+          doc.text(`${p?.payment_method || rData.payment_method || 'UPI'}`, 72, curY);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(16, 185, 129);
+          doc.text(`INR ${(st.amount_paid || 0).toLocaleString('en-IN')}`, 106, curY);
+          doc.setTextColor(15, 23, 42);
+          doc.setFont('helvetica', 'normal');
+          curY += 6;
+        }
+      });
+    } else {
+      doc.text("Tuition Fee Collection", 14, curY);
+      doc.text(`${p?.payment_method || 'Cash'}${p?.transaction_reference ? ' (' + p.transaction_reference + ')' : ''}`, 72, curY);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(16, 185, 129);
+      doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 106, curY);
+      curY += 6;
+    }
 
     // Line
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 104, 134, 104);
+    doc.line(14, curY + 2, 134, curY + 2);
 
     // Financial Summary
+    curY += 9;
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
-    doc.text("Total Paid This Transaction:", 55, 113);
+    doc.text("Total Paid This Transaction:", 55, curY);
     doc.setFont('helvetica', 'bold');
-    doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 110, 113);
+    doc.text(`INR ${(r.amount_paid || 0).toLocaleString('en-IN')}`, 110, curY);
 
+    curY += 6;
     doc.setFont('helvetica', 'normal');
-    doc.text("Remaining Balance Pending:", 55, 120);
+    doc.text("Remaining Balance Pending:", 55, curY);
     doc.setFont('helvetica', 'bold');
     const bal = r.remaining_balance || 0;
     doc.setTextColor(bal > 0 ? 239 : 16, bal > 0 ? 68 : 185, bal > 0 ? 68 : 129);
-    doc.text(`INR ${bal.toLocaleString('en-IN')}`, 110, 120);
+    doc.text(`INR ${bal.toLocaleString('en-IN')}`, 110, curY);
 
     // Footer
     doc.setTextColor(100, 116, 139);
@@ -367,7 +456,7 @@ const ReceiptsModule = {
     window.print();
   },
 
-  // Direct WhatsApp Receipt Sharing
+  // Direct WhatsApp Receipt Sharing (Supports Multi-Profile & Single-Profile Format)
   shareViaWhatsApp: async (receiptId = null) => {
     let r = ReceiptsModule.currentReceipt;
     if (receiptId && (!r || r.id !== receiptId)) {
@@ -395,9 +484,8 @@ const ReceiptsModule = {
     const inst = AppState.institution;
     const orgName = inst?.institution_name || "I2B Educational Institution";
     const rData = r.receipt_data || {};
+    const isCombined = rData.is_combined || (rData.students && rData.students.length > 1);
 
-    const studentName = s?.name || rData.student_name || 'Student';
-    const studentId = s?.student_id || rData.student_code || 'STU';
     const receiptNo = r.receipt_number || 'REC';
     const paymentNo = p?.payment_number || (receiptNo.startsWith('REC-') ? receiptNo.replace('REC-', 'PAY-') : 'PAY-' + receiptNo);
     const date = r.issue_date || new Date().toISOString().slice(0, 10);
@@ -405,17 +493,36 @@ const ReceiptsModule = {
     const amountPaid = amountVal.toFixed(2);
     const paymentMethod = (p?.payment_method || rData.payment_method || 'UPI').toUpperCase();
 
-    // Exact receipt text format matching institutional guidelines
+    let introAndStudentBlock = '';
+    let targetPhone = (s?.whatsapp_number || '').trim();
+
+    if (isCombined && rData.students && rData.students.length > 0) {
+      const firstWithPhone = rData.students.find(st => (st.whatsapp_number || '').trim());
+      if (firstWithPhone) targetPhone = firstWithPhone.whatsapp_number.trim();
+
+      const studentLines = rData.students.map(st => {
+        const itemDescs = (st.items && st.items.length > 0)
+          ? st.items.map(it => `${it.label}: Rs. ${parseFloat(it.amount).toFixed(2)}`).join('\n   ')
+          : `Tuition Fee: Rs. ${parseFloat(st.amount_paid).toFixed(2)}`;
+        return `• *${st.name}* (ID: ${st.student_id})\n   ${itemDescs}`;
+      }).join('\n');
+
+      introAndStudentBlock = `Dear Parent,\nWe gratefully acknowledge receipt of tuition fee payment for:\n${studentLines}`;
+    } else {
+      const studentName = s?.name || rData.students?.[0]?.name || 'Student';
+      const studentId = s?.student_id || rData.students?.[0]?.student_id || 'STU';
+      introAndStudentBlock = `Dear Parent / Student,\nWe gratefully acknowledge receipt of fee payment for *${studentName}* (ID: ${studentId}).`;
+    }
+
     const msg = `*${orgName}*
 *Fee Payment Receipt Confirmation*
 
-Dear Parent / Student,
-We gratefully acknowledge receipt of fee payment for *${studentName}* (ID: ${studentId}).
+${introAndStudentBlock}
 
 *Receipt No:* ${receiptNo}
 *Payment No:* ${paymentNo}
 *Date:* ${date}
-*Amount Paid:* Rs. ${amountPaid}
+*Total Amount Paid:* Rs. ${amountPaid}
 *Payment Method:* ${paymentMethod}
 
 Thank you!
@@ -424,13 +531,11 @@ For queries, contact: +91 6385577966  OR +91 9345999260
 Email: i2btutioncentre@gmail.com
 Thank you for your prompt payment! This is an official computer-generated receipt.`;
 
-    const rawPhone = (s?.whatsapp_number || '').trim();
-
     // 1. Direct send if registered WhatsApp number exists
-    if (rawPhone) {
-      const waUrl = Utils.buildWhatsAppUrl(rawPhone, msg);
+    if (targetPhone) {
+      const waUrl = Utils.buildWhatsAppUrl(targetPhone, msg);
       window.open(waUrl, '_blank');
-      Utils.showToast("WhatsApp Opened", `Sending receipt confirmation directly to ${studentName} (${rawPhone})`, "success", 4000);
+      Utils.showToast("WhatsApp Opened", `Sending receipt confirmation to ${targetPhone}`, "success", 4000);
       return;
     }
 
@@ -438,7 +543,7 @@ Thank you for your prompt payment! This is an official computer-generated receip
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: `Receipt - ${studentName} (${receiptNo})`,
+          title: `Receipt - ${receiptNo}`,
           text: msg
         });
         Utils.showToast("Sharing Sheet Opened", "Select parent contact to send.", "info", 5000);
