@@ -1809,8 +1809,19 @@
             </label>
             <!-- Selected Student Tags (Pills) -->
             <div id="payment-selected-students-tags" style="display: none; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem;"></div>
+            
+            <!-- Quick Filter / Search Bar to avoid scrolling -->
+            <div style="position: relative; margin-bottom: 0.4rem;">
+              <input type="text" id="payment-student-filter-input" class="form-control form-control-sm" 
+                placeholder="🔍 Type student name, ID, or programme to filter..." 
+                oninput="PaymentsModule.filterStudentDropdown(this.value)"
+                autocomplete="off"
+                style="padding-left: 2rem; font-size: 0.8rem; height: 34px;">
+              <i data-lucide="search" style="position: absolute; left: 8px; top: 9px; width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;"></i>
+            </div>
+
             <select id="payment-student-select" class="form-control" onchange="PaymentsModule.onStudentSelectChange(this.value)">
-              <!-- Dynamically populated with Programme & Grade info -->
+              <!-- Dynamically populated with Priority Related Profiles on top & all students -->
             </select>
           </div>
 

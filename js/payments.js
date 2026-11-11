@@ -157,13 +157,14 @@ const PaymentsModule = {
     Utils.renderIcons();
   },
 
-  // Populate student dropdown with clear Programme and Grade identifiers
-  populateStudentDropdown: () => {
+  // Populate student dropdown with Smart Related Profiles grouped at the TOP, followed by other students
+  populateStudentDropdown: (filterQuery = '') => {
     const studentSelect = document.getElementById('payment-student-select');
     if (!studentSelect) return;
 
     const students = AppState.students || [];
     const selectedIds = PaymentsModule.selectedStudentIds || [];
+    const selectedStudents = students.filter(s => selectedIds.includes(s.id));
 
     const formatOptionText = (s) => {
       const bal = StudentsModule.calculateOutstandingBalance(s);
@@ -187,15 +188,94 @@ const PaymentsModule = {
       : '-- Choose Student --';
 
     const availableStudents = students.filter(s => !selectedIds.includes(s.id));
+    const cleanQuery = (filterQuery || '').trim().toLowerCase();
 
-    studentSelect.innerHTML = `<option value="">${defaultLabel}</option>` + 
-      availableStudents.map(s => `
+    // Partition into related profiles (same phone, name, or parent) vs other students
+    const relatedStudents = [];
+    const otherStudents = [];
+
+    availableStudents.forEach(s => {
+      // Filter check if query is provided
+      if (cleanQuery) {
+        const activeEnrs = (s.enrollments || []).filter(e => e.status === 'active');
+        const progStr = activeEnrs.map(e => e.programmes?.name || '').join(' ').toLowerCase();
+        const matches = (s.name || '').toLowerCase().includes(cleanQuery) ||
+          (s.student_id || '').toLowerCase().includes(cleanQuery) ||
+          (s.parent_name || '').toLowerCase().includes(cleanQuery) ||
+          (s.whatsapp_number || '').includes(cleanQuery) ||
+          progStr.includes(cleanQuery) ||
+          (s.grade || '').toLowerCase().includes(cleanQuery);
+        if (!matches) return;
+      }
+
+      // Check if related to any currently selected student
+      if (selectedStudents.length > 0) {
+        const sPhone = (s.whatsapp_number || '').replace(/\D/g, '').slice(-10);
+        const sParent = (s.parent_name || '').trim().toLowerCase();
+        const sName = (s.name || '').trim().toLowerCase();
+
+        let isRelated = false;
+        for (const cur of selectedStudents) {
+          const curPhone = (cur.whatsapp_number || '').replace(/\D/g, '').slice(-10);
+          const curParent = (cur.parent_name || '').trim().toLowerCase();
+          const curName = (cur.name || '').trim().toLowerCase();
+
+          const phoneMatch = curPhone.length >= 8 && sPhone.length >= 8 && curPhone === sPhone;
+          const nameMatch = curName.length >= 3 && curName === sName;
+          const parentMatch = curParent.length >= 3 && curParent === sParent;
+
+          if (phoneMatch || nameMatch || parentMatch) {
+            isRelated = true;
+            break;
+          }
+        }
+
+        if (isRelated) {
+          relatedStudents.push(s);
+        } else {
+          otherStudents.push(s);
+        }
+      } else {
+        otherStudents.push(s);
+      }
+    });
+
+    let optionsHtml = `<option value="">${defaultLabel}</option>`;
+
+    // Place related profiles (same phone/name/parent) at the VERY TOP
+    if (relatedStudents.length > 0) {
+      optionsHtml += `<optgroup label="⭐ Related Profiles / Same Family (1-Click)">` + 
+        relatedStudents.map(s => `
+          <option value="${s.id}">
+            ⭐ ${Utils.escapeHtml(formatOptionText(s))}
+          </option>
+        `).join('') + 
+        `</optgroup>`;
+
+      if (otherStudents.length > 0) {
+        optionsHtml += `<optgroup label="All Other Students">` + 
+          otherStudents.map(s => `
+            <option value="${s.id}">
+              ${Utils.escapeHtml(formatOptionText(s))}
+            </option>
+          `).join('') + 
+          `</optgroup>`;
+      }
+    } else {
+      optionsHtml += otherStudents.map(s => `
         <option value="${s.id}">
           ${Utils.escapeHtml(formatOptionText(s))}
         </option>
       `).join('');
+    }
 
+    studentSelect.innerHTML = optionsHtml;
     studentSelect.value = '';
+  },
+
+  // Instant filter for the student dropdown
+  filterStudentDropdown: (query) => {
+    PaymentsModule.populateStudentDropdown(query);
   },
 
   // Update selected student pill tags
@@ -250,12 +330,15 @@ const PaymentsModule = {
     if (refInput) refInput.value = '';
     const notesInput = document.getElementById('payment-notes-input');
     if (notesInput) notesInput.value = '';
+    const filterInput = document.getElementById('payment-student-filter-input');
+    if (filterInput) filterInput.value = '';
 
     PaymentsModule.updateSelectedStudentTags();
     PaymentsModule.populateStudentDropdown();
     PaymentsModule.renderPaymentChecklist();
 
     Utils.openModal('modal-record-payment');
+    Utils.renderIcons();
   },
 
   // When student is selected in dropdown
@@ -264,6 +347,9 @@ const PaymentsModule = {
     if (!PaymentsModule.selectedStudentIds.includes(studentId)) {
       PaymentsModule.selectedStudentIds.push(studentId);
     }
+    const filterInput = document.getElementById('payment-student-filter-input');
+    if (filterInput) filterInput.value = '';
+
     PaymentsModule.updateSelectedStudentTags();
     PaymentsModule.populateStudentDropdown();
     PaymentsModule.renderPaymentChecklist();
@@ -272,11 +358,13 @@ const PaymentsModule = {
   // Remove a student from selection
   removeStudent: (studentId) => {
     PaymentsModule.selectedStudentIds = PaymentsModule.selectedStudentIds.filter(id => id !== studentId);
+    const filterInput = document.getElementById('payment-student-filter-input');
+    if (filterInput) filterInput.value = '';
+
     PaymentsModule.updateSelectedStudentTags();
     PaymentsModule.populateStudentDropdown();
     PaymentsModule.renderPaymentChecklist();
   },
-
   // Render the category and invoice payment checklist for all selected profiles
   renderPaymentChecklist: () => {
     const container = document.getElementById('payment-invoices-checklist');
